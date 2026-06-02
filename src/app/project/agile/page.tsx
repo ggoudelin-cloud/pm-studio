@@ -3,7 +3,7 @@
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useSprints, useUserStories } from "@/hooks/useProjects";
+import { useSprints, useUserStories, useEpics, useCreateEpic, useUpdateEpic, useDeleteEpic } from "@/hooks/useProjects";
 import { supabase } from "@/lib/supabase";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
@@ -11,8 +11,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { formatDate } from "@/lib/utils";
-import { Plus, X, Zap } from "lucide-react";
-import type { UserStory, Sprint } from "@/types";
+import { Plus, X, Zap, Layers, Trash2 } from "lucide-react";
+import type { UserStory, Sprint, Epic } from "@/types";
 import { useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 
@@ -143,7 +143,13 @@ function AgilePageContent() {
   const id = searchParams.get("id");
   const { data: sprints,  isLoading: loadingSprints  } = useSprints(id);
   const { data: stories,  isLoading: loadingStories  } = useUserStories(id);
-  const [tab, setTab] = useState<"kanban" | "sprints">("kanban");
+  const { data: epics = [] } = useEpics(id);
+  const createEpic = useCreateEpic();
+  const updateEpic = useUpdateEpic();
+  const deleteEpic = useDeleteEpic();
+  const [tab, setTab] = useState<"kanban" | "sprints" | "epics">("kanban");
+  const [epicTitle, setEpicTitle] = useState("");
+  const [epicColor, setEpicColor] = useState("#6366f1");
   const [showModal, setShowModal] = useState(false);
 
   const storiesByStatus = (status: string) => stories?.filter((s) => s.status === status) ?? [];
@@ -172,7 +178,7 @@ function AgilePageContent() {
 
         {/* Tabs */}
         <div className="flex gap-1 bg-slate-900 border border-slate-800 rounded-xl p-1 w-fit">
-          {[{ key: "kanban", label: "Kanban" }, { key: "sprints", label: "Sprints" }].map(({ key, label }) => (
+          {[{ key: "kanban", label: "Kanban" }, { key: "sprints", label: "Sprints" }, { key: "epics", label: "Épics" }].map(({ key, label }) => (
             <button key={key} onClick={() => setTab(key as typeof tab)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 tab === key ? "bg-indigo-600 text-white" : "text-slate-400 hover:text-slate-200"
@@ -222,6 +228,72 @@ function AgilePageContent() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {sprints.map((sprint) => <SprintCard key={sprint.id} sprint={sprint} />)}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Épics */}
+        {tab === "epics" && (
+          <div className="space-y-4">
+            <form onSubmit={async e => { e.preventDefault(); if (!epicTitle.trim() || !id) return; await createEpic.mutateAsync({ project_id: id, title: epicTitle, color: epicColor }); setEpicTitle(""); }} className="flex gap-3 items-end">
+              <div className="flex-1">
+                <label className="block text-xs text-slate-400 mb-1">Titre de l&apos;épic</label>
+                <input value={epicTitle} onChange={e => setEpicTitle(e.target.value)} placeholder="ex : Authentification utilisateur"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Couleur</label>
+                <input type="color" value={epicColor} onChange={e => setEpicColor(e.target.value)}
+                  className="w-10 h-10 bg-slate-900 border border-slate-800 rounded-lg cursor-pointer" />
+              </div>
+              <Button type="submit" loading={createEpic.isPending}><Plus className="w-4 h-4" /> Créer l&apos;épic</Button>
+            </form>
+
+            {epics.length === 0 ? (
+              <div className="py-10 text-center">
+                <Layers className="w-10 h-10 text-slate-700 mx-auto mb-3" />
+                <p className="text-slate-400">Aucun épic. Les épics regroupent plusieurs user stories.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {epics.map(epic => {
+                  const epicStories = stories?.filter(s => s.epic_id === epic.id) ?? [];
+                  const doneS = epicStories.filter(s => s.status === "done").length;
+                  return (
+                    <Card key={epic.id} className="hover:border-slate-700 transition-colors">
+                      <CardBody>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-3 h-3 rounded-full shrink-0" style={{ background: epic.color ?? "#6366f1" }} />
+                            <p className="font-semibold text-slate-100">{epic.title}</p>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <select value={epic.status} onChange={e => updateEpic.mutate({ id: epic.id, project_id: id!, status: e.target.value as Epic["status"] })}
+                              className="text-xs bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-slate-300 focus:outline-none">
+                              <option value="open">Ouvert</option>
+                              <option value="in_progress">En cours</option>
+                              <option value="closed">Fermé</option>
+                            </select>
+                            <button onClick={() => deleteEpic.mutate({ id: epic.id, project_id: id! })} className="text-slate-600 hover:text-red-400 transition-colors">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                        {epic.description && <p className="text-xs text-slate-500 mt-2">{epic.description}</p>}
+                        <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+                          <span>{epicStories.length} stories</span>
+                          <span>{doneS}/{epicStories.length} terminées</span>
+                        </div>
+                        {epicStories.length > 0 && (
+                          <div className="mt-2 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full transition-all" style={{ width: `${Math.round((doneS / epicStories.length) * 100)}%`, background: epic.color ?? "#6366f1" }} />
+                          </div>
+                        )}
+                      </CardBody>
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </div>

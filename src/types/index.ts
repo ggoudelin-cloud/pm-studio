@@ -13,6 +13,7 @@ export interface Profile {
   avatar_url: string | null;
   job_title: string | null;
   organization: string | null;
+  email: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -161,6 +162,66 @@ export interface MethodologyDecision {
   score_agile: number | null;
   criteria_snapshot: Record<string, number> | null;
   decided_at: string;
+}
+
+export interface Deliverable {
+  id: string;
+  project_id: string;
+  phase_id: string | null;
+  title: string;
+  description: string | null;
+  file_url: string | null;
+  status: "draft" | "submitted" | "approved" | "rejected";
+  submitted_by: string | null;
+  submitted_at: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
+export interface Retrospective {
+  id: string;
+  sprint_id: string;
+  project_id: string;
+  went_well: string[] | null;
+  to_improve: string[] | null;
+  action_items: string[] | null;
+  happiness_score: number | null;
+  held_at: string;
+  created_by: string;
+}
+
+export interface Comment {
+  id: string;
+  project_id: string;
+  author_id: string;
+  entity_type: string;
+  entity_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  profiles?: { full_name: string | null; email: string | null };
+}
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  project_id: string | null;
+  type: string;
+  title: string;
+  message: string | null;
+  read: boolean;
+  link: string | null;
+  created_at: string;
+}
+
+export interface TraceabilityLink {
+  id: string;
+  project_id: string;
+  requirement_id: string | null;
+  test_case_id: string | null;
+  link_type: string;
+  created_at: string;
 }
 
 export interface KanbanCard {

@@ -3,7 +3,8 @@
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useTasks, useCreateTask, useUpdateTask } from "@/hooks/useProjects";
+import { useTasks, useCreateTask, useUpdateTask, useDeleteTask } from "@/hooks/useProjects";
+import Comments from "@/components/Comments";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -194,6 +195,13 @@ function TaskModal({ projectId, task, onClose }: {
               </Button>
             </div>
           </form>
+
+          {/* Commentaires — uniquement en mode édition */}
+          {isEdit && task && (
+            <div className="px-6 pb-6 pt-2 border-t border-slate-800 mt-2">
+              <Comments projectId={projectId} entityType="task" entityId={task.id} />
+            </div>
+          )}
         </div>
       </div>
     </div>
