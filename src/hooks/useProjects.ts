@@ -24,9 +24,9 @@ export function useProject(id: string | null) {
     queryKey: ["project", id],
     enabled: !!id,
     queryFn: async () => {
-      const { data, error } = await DB().from("projects").select("*").eq("id", id!).single();
+      const { data, error } = await DB().from("projects").select("*").eq("id", id!).limit(1);
       if (error) throw error;
-      return data as Project;
+      return (data?.[0] ?? null) as Project | null;
     },
   });
 }

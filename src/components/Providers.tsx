@@ -27,13 +27,17 @@ function AuthListener() {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          const { data } = await supabase
-            .schema("hybridpm")
-            .from("profiles")
-            .select("*")
-            .eq("id", session.user.id)
-            .single();
-          setProfile(data);
+          try {
+            const { data } = await supabase
+              .schema("hybridpm")
+              .from("profiles")
+              .select("*")
+              .eq("id", session.user.id)
+              .limit(1);
+            setProfile(data?.[0] ?? null);
+          } catch {
+            setProfile(null);
+          }
         } else {
           setProfile(null);
         }
