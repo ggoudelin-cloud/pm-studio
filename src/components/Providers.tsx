@@ -6,9 +6,9 @@ import { Toaster } from "react-hot-toast";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 
-const queryClient = new QueryClient({
+export const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { staleTime: 1000 * 60 * 5, retry: 1 },
+    queries: { staleTime: 1000 * 60 * 2, retry: 1 },
   },
 });
 
@@ -29,11 +29,15 @@ function AuthListener() {
 
     // onAuthStateChange gère login/logout/refresh en temps réel
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
 
         if (session?.user) {
+          // Forcer le refetch de toutes les queries après connexion
+          if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+            queryClient.invalidateQueries();
+          }
           try {
             const { data } = await supabase
               .schema("hybridpm")
@@ -47,6 +51,8 @@ function AuthListener() {
           }
         } else {
           setProfile(null);
+          // Vider le cache à la déconnexion pour éviter les données stales
+          queryClient.clear();
         }
 
         setLoading(false);
