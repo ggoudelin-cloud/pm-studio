@@ -1,9 +1,11 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useProject, useUpdateProject, useProjectMembers, useTasks, useSprints, usePhases, useMilestones } from "@/hooks/useProjects";
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -12,8 +14,9 @@ import { Input } from "@/components/ui/Input";
 import { getMethodologyLabel, getMethodologyColor, getStatusLabel, formatDate } from "@/lib/utils";
 import {
   KanbanSquare, GitBranch, ListTodo, ArrowRight, CalendarDays,
-  Banknote, Users, Download, X, Edit2, Package, RefreshCw, GitMerge,
+  Banknote, Users, Download, X, Edit2, Package, RefreshCw, GitMerge, Trash2,
 } from "lucide-react";
+import toast from "react-hot-toast";
 import type { Project } from "@/types";
 
 // ── Modal Modifier projet ────────────────────────────────────────────────────
@@ -127,6 +130,7 @@ function ProjectNav({ id }: { id: string }) {
 function ProjectPageContent() {
   const searchParams  = useSearchParams();
   const id            = searchParams.get("id");
+  const router        = useRouter();
   const { data: project, isLoading } = useProject(id);
   const { data: members }   = useProjectMembers(id);
   const { data: tasks }     = useTasks(id);
@@ -135,6 +139,8 @@ function ProjectPageContent() {
   const { data: milestones } = useMilestones(id);
   const [showEdit,   setShowEdit]   = useState(false);
   const [exporting,  setExporting]  = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const qcProject = useQueryClient();
 
   async function handleExport() {
     if (!project) return;
@@ -192,6 +198,9 @@ function ProjectPageContent() {
                 </Button>
                 <Button variant="secondary" size="sm" onClick={handleExport} loading={exporting}>
                   <Download className="w-3.5 h-3.5" /> Export PPT
+                </Button>
+                <Button variant="danger" size="sm" onClick={() => setConfirmDel(true)}>
+                  <Trash2 className="w-3.5 h-3.5" /> Supprimer
                 </Button>
               </div>
             </div>
@@ -274,6 +283,48 @@ function ProjectPageContent() {
       </div>
 
       {showEdit && project && <EditProjectModal project={project} onClose={() => setShowEdit(false)} />}
+
+      {confirmDel && project && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-red-800/50 rounded-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-red-900/30 rounded-xl flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-white">Supprimer le projet ?</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Cette action est irréversible.</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-300">
+              Le projet <span className="font-medium text-white">« {project.name} »</span> et toutes ses données (tâches, sprints, phases, livrables…) seront supprimés définitivement.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmDel(false)}
+                className="flex-1 px-4 py-2 rounded-lg text-sm bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors">
+                Annuler
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const { error } = await supabase.schema("hybridpm").from("projects").delete().eq("id", project.id);
+                    if (error) throw error;
+                    qcProject.invalidateQueries({ queryKey: ["projects"] });
+                    toast.success("Projet supprimé.");
+                    router.replace("/projects/");
+                  } catch (e: unknown) {
+                    toast.error(e instanceof Error ? e.message : "Erreur lors de la suppression");
+                    setConfirmDel(false);
+                  }
+                }}
+                className="flex-1 px-4 py-2 rounded-lg text-sm bg-red-600 hover:bg-red-500 text-white transition-colors font-medium"
+              >
+                Supprimer définitivement
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

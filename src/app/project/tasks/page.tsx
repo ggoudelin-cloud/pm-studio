@@ -4,6 +4,7 @@ import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useTasks, useCreateTask, useUpdateTask, useDeleteTask } from "@/hooks/useProjects";
+import { Trash2 } from "lucide-react";
 import Comments from "@/components/Comments";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
@@ -217,9 +218,11 @@ function TasksPageContent() {
   const searchParams = useSearchParams();
   const id = searchParams.get("id");
   const { data: tasks, isLoading } = useTasks(id);
-  const [showModal, setShowModal] = useState(false);
-  const [editTask, setEditTask]   = useState<Task | undefined>();
-  const [filterM, setFilterM]     = useState("");
+  const deleteTask = useDeleteTask();
+  const [showModal,  setShowModal]  = useState(false);
+  const [editTask,   setEditTask]   = useState<Task | undefined>();
+  const [filterM,    setFilterM]    = useState("");
+  const [confirmDel, setConfirmDel] = useState<Task | null>(null);
 
   const filtered = tasks?.filter((t) => !filterM || t.methodology === filterM || t.methodology_recommendation === filterM) ?? [];
 
@@ -302,6 +305,13 @@ function TasksPageContent() {
                       >
                         Modifier
                       </button>
+                      <button
+                        onClick={() => setConfirmDel(task)}
+                        className="text-slate-600 hover:text-red-400 transition-colors"
+                        title="Supprimer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 </CardBody>
@@ -313,6 +323,33 @@ function TasksPageContent() {
 
       {showModal && id && (
         <TaskModal projectId={id} task={editTask} onClose={() => { setShowModal(false); setEditTask(undefined); }} />
+      )}
+
+      {/* Confirmation suppression tâche */}
+      {confirmDel && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-semibold text-white">Supprimer la tâche ?</h3>
+            <p className="text-sm text-slate-400">
+              <span className="text-slate-200 font-medium">« {confirmDel.title} »</span> sera supprimée définitivement.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmDel(null)}
+                className="flex-1 px-4 py-2 rounded-lg text-sm bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors">
+                Annuler
+              </button>
+              <button
+                onClick={async () => {
+                  await deleteTask.mutateAsync({ id: confirmDel.id, project_id: confirmDel.project_id });
+                  setConfirmDel(null);
+                }}
+                className="flex-1 px-4 py-2 rounded-lg text-sm bg-red-600 hover:bg-red-500 text-white transition-colors"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </DashboardLayout>
   );
