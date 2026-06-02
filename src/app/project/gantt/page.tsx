@@ -34,13 +34,61 @@ function fmtShort(d: Date) {
   return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" });
 }
 
-function EditDatesModal({ task, onClose }: { task: Task; onClose: () => void }) {
+// Calcule la date minimum autorisée (fin prédécesseur + lag + 1 jour)
+function minStartAfterPred(predTask: Task, lagDays: number): string {
+  const endDate = predTask.due_date ?? (predTask as Task & { start_date?: string }).start_date;
+  if (!endDate) return "";
+  const d = new Date(endDate);
+  d.setDate(d.getDate() + lagDays + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function EditDatesModal({ task, tasks, deps, onClose }: {
+  task: Task;
+  tasks: Task[];
+  deps: { id: string; task_id: string; predecessor_id: string; lag_days: number }[];
+  onClose: () => void;
+}) {
   const update = useUpdateTask();
   const [start, setStart] = useState((task as Task & { start_date?: string }).start_date ?? "");
-  const [end, setEnd] = useState(task.due_date ?? "");
+  const [end, setEnd]     = useState(task.due_date ?? "");
+  const [error, setError] = useState("");
+
+  // Dépendances de cette tâche (prédécesseurs)
+  const predecessors = deps
+    .filter(d => d.task_id === task.id)
+    .map(d => ({ dep: d, pred: tasks.find(t => t.id === d.predecessor_id) }))
+    .filter(x => x.pred);
+
+  // Date minimum autorisée pour le début (max de toutes les fins prédécesseurs + lag)
+  const minStart = predecessors.reduce((best, { dep, pred }) => {
+    const min = minStartAfterPred(pred!, dep.lag_days);
+    return min > best ? min : best;
+  }, "");
+
+  function validate(startVal: string, endVal: string): string {
+    if (startVal && endVal && startVal > endVal)
+      return "La date de début doit être antérieure à la date de fin.";
+    if (minStart && startVal && startVal <= minStart) {
+      const blocking = predecessors.find(({ dep, pred }) => minStartAfterPred(pred!, dep.lag_days) >= startVal);
+      return `La date de début doit être après la fin du prédécesseur « ${blocking?.pred?.title ?? "?"} »${blocking?.dep.lag_days ? ` + ${blocking.dep.lag_days} j de décalage` : ""}.`;
+    }
+    return "";
+  }
+
+  function handleStart(v: string) {
+    setStart(v);
+    setError(validate(v, end));
+  }
+  function handleEnd(v: string) {
+    setEnd(v);
+    setError(validate(start, v));
+  }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    const err = validate(start, end);
+    if (err) { setError(err); return; }
     await update.mutateAsync({ id: task.id, project_id: task.project_id, start_date: start || null, due_date: end || null } as Parameters<typeof update.mutateAsync>[0]);
     onClose();
   }
@@ -52,20 +100,38 @@ function EditDatesModal({ task, onClose }: { task: Task; onClose: () => void }) 
           <h3 className="font-semibold text-white text-sm truncate">{task.title}</h3>
           <button onClick={onClose}><X className="w-4 h-4 text-slate-400" /></button>
         </div>
+
+        {predecessors.length > 0 && (
+          <div className="bg-slate-800/50 rounded-lg p-2.5 space-y-1">
+            <p className="text-xs text-slate-500 font-medium">Contraintes prédécesseurs :</p>
+            {predecessors.map(({ dep, pred }) => {
+              const min = minStartAfterPred(pred!, dep.lag_days);
+              return (
+                <p key={dep.id} className="text-xs text-indigo-300">
+                  ← {pred!.title} — début après le{" "}
+                  <span className="font-medium">{min ? new Date(min).toLocaleDateString("fr-FR") : "?"}</span>
+                  {dep.lag_days > 0 && ` (+${dep.lag_days}j)`}
+                </p>
+              );
+            })}
+          </div>
+        )}
+
         <form onSubmit={save} className="space-y-3">
           <div className="flex flex-col gap-1">
             <label className="text-xs text-slate-400">Date de début</label>
-            <input type="date" value={start} onChange={e => setStart(e.target.value)}
-              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <input type="date" value={start} min={minStart || undefined} onChange={e => handleStart(e.target.value)}
+              className={`bg-slate-800 border rounded-lg px-3 py-1.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${error && error.includes("début") ? "border-red-500" : "border-slate-700"}`} />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs text-slate-400">Date de fin</label>
-            <input type="date" value={end} onChange={e => setEnd(e.target.value)}
-              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <input type="date" value={end} min={start || undefined} onChange={e => handleEnd(e.target.value)}
+              className={`bg-slate-800 border rounded-lg px-3 py-1.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${error && error.includes("fin") ? "border-red-500" : "border-slate-700"}`} />
           </div>
+          {error && <p className="text-xs text-red-400 bg-red-950/30 border border-red-800/50 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex gap-2 pt-1">
             <Button type="button" variant="secondary" size="sm" onClick={onClose} className="flex-1 justify-center">Annuler</Button>
-            <Button type="submit" size="sm" loading={update.isPending} className="flex-1 justify-center">Enregistrer</Button>
+            <Button type="submit" size="sm" loading={update.isPending} disabled={!!error} className="flex-1 justify-center">Enregistrer</Button>
           </div>
         </form>
       </div>
@@ -73,16 +139,58 @@ function EditDatesModal({ task, onClose }: { task: Task; onClose: () => void }) 
   );
 }
 
-function AddDepModal({ task, tasks, projectId, onClose }: { task: Task; tasks: Task[]; projectId: string; onClose: () => void }) {
-  const addDep = useAddDependency();
+function AddDepModal({ task, tasks, deps, projectId, onClose }: {
+  task: Task;
+  tasks: Task[];
+  deps: { id: string; task_id: string; predecessor_id: string; lag_days: number }[];
+  projectId: string;
+  onClose: () => void;
+}) {
+  const addDep   = useAddDependency();
+  const update   = useUpdateTask();
   const [predId, setPredId] = useState("");
-  const [lag, setLag] = useState(0);
-  const available = tasks.filter(t => t.id !== task.id);
+  const [lag,    setLag]    = useState(0);
+  const [error,  setError]  = useState("");
+
+  // Exclure la tâche elle-même et les dépendances circulaires
+  const existingPredIds = deps.filter(d => d.task_id === task.id).map(d => d.predecessor_id);
+  const available = tasks.filter(t => t.id !== task.id && !existingPredIds.includes(t.id));
+
+  const selectedPred = tasks.find(t => t.id === predId);
+  const minStart     = selectedPred ? minStartAfterPred(selectedPred, lag) : "";
+  const taskStart    = (task as Task & { start_date?: string }).start_date ?? "";
+  const conflictDate = minStart && taskStart && taskStart <= minStart;
+
+  function validateSelection(pid: string, lagVal: number): string {
+    const pred = tasks.find(t => t.id === pid);
+    if (!pred) return "";
+    const min = minStartAfterPred(pred, lagVal);
+    const ts  = (task as Task & { start_date?: string }).start_date ?? "";
+    if (min && ts && ts <= min)
+      return `La tâche actuelle commence le ${new Date(ts).toLocaleDateString("fr-FR")}, mais doit commencer après le ${new Date(min).toLocaleDateString("fr-FR")} (fin de « ${pred.title} »${lagVal ? ` + ${lagVal}j` : ""}).`;
+    return "";
+  }
+
+  function handlePred(pid: string) {
+    setPredId(pid);
+    setError(validateSelection(pid, lag));
+  }
+  function handleLag(l: number) {
+    setLag(l);
+    setError(validateSelection(predId, l));
+  }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     if (!predId) return;
+    const err = validateSelection(predId, lag);
+    if (err && !conflictDate) { setError(err); return; }
     await addDep.mutateAsync({ taskId: task.id, predecessorId: predId, lagDays: lag, projectId });
+    // Si conflit de dates, mettre à jour automatiquement la date de début
+    if (conflictDate && minStart) {
+      await update.mutateAsync({ id: task.id, project_id: task.project_id, start_date: minStart } as Parameters<typeof update.mutateAsync>[0]);
+      toast.success(`Date de début ajustée au ${new Date(minStart).toLocaleDateString("fr-FR")}`);
+    }
     onClose();
   }
 
@@ -93,24 +201,40 @@ function AddDepModal({ task, tasks, projectId, onClose }: { task: Task; tasks: T
           <h3 className="font-semibold text-white text-sm">Ajouter un prédécesseur</h3>
           <button onClick={onClose}><X className="w-4 h-4 text-slate-400" /></button>
         </div>
-        <p className="text-xs text-slate-400">Tâche : <span className="text-slate-200">{task.title}</span></p>
+        <p className="text-xs text-slate-400">Tâche : <span className="text-slate-200">{task.title}</span>
+          {taskStart && <span className="text-slate-500 ml-1">(début : {new Date(taskStart).toLocaleDateString("fr-FR")})</span>}
+        </p>
         <form onSubmit={save} className="space-y-3">
           <div className="flex flex-col gap-1">
             <label className="text-xs text-slate-400">Prédécesseur (doit finir avant)</label>
-            <select value={predId} onChange={e => setPredId(e.target.value)} required
+            <select value={predId} onChange={e => handlePred(e.target.value)} required
               className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
               <option value="">— Sélectionner une tâche —</option>
-              {available.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+              {available.map(t => {
+                const end = t.due_date ?? (t as Task & { start_date?: string }).start_date;
+                return <option key={t.id} value={t.id}>{t.title}{end ? ` (fin: ${new Date(end).toLocaleDateString("fr-FR")})` : ""}</option>;
+              })}
             </select>
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs text-slate-400">Décalage (jours après la fin)</label>
-            <input type="number" min={0} value={lag} onChange={e => setLag(parseInt(e.target.value) || 0)}
+            <input type="number" min={0} value={lag} onChange={e => handleLag(parseInt(e.target.value) || 0)}
               className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
           </div>
+
+          {selectedPred && minStart && (
+            <div className={`text-xs rounded-lg px-3 py-2 border ${conflictDate ? "bg-amber-950/30 border-amber-700/50 text-amber-300" : "bg-green-950/30 border-green-800/50 text-green-300"}`}>
+              {conflictDate
+                ? `⚠ Conflit : la date de début sera ajustée automatiquement au ${new Date(minStart).toLocaleDateString("fr-FR")}.`
+                : `✓ Compatible — début de la tâche après le ${new Date(minStart).toLocaleDateString("fr-FR")}.`}
+            </div>
+          )}
+
           <div className="flex gap-2 pt-1">
             <Button type="button" variant="secondary" size="sm" onClick={onClose} className="flex-1 justify-center">Annuler</Button>
-            <Button type="submit" size="sm" loading={addDep.isPending} className="flex-1 justify-center">Ajouter</Button>
+            <Button type="submit" size="sm" loading={addDep.isPending || update.isPending} className="flex-1 justify-center">
+              {conflictDate ? "Ajouter & Ajuster" : "Ajouter"}
+            </Button>
           </div>
         </form>
       </div>
@@ -372,8 +496,8 @@ function GanttContent() {
         )}
       </div>
 
-      {editTask && <EditDatesModal task={editTask} onClose={() => setEditTask(null)} />}
-      {depTask  && id && <AddDepModal task={depTask} tasks={tasks} projectId={id} onClose={() => setDepTask(null)} />}
+      {editTask && <EditDatesModal task={editTask} tasks={tasks} deps={deps} onClose={() => setEditTask(null)} />}
+      {depTask  && id && <AddDepModal task={depTask} tasks={tasks} deps={deps} projectId={id} onClose={() => setDepTask(null)} />}
     </DashboardLayout>
   );
 }
