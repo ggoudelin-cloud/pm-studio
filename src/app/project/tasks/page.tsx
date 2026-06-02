@@ -133,63 +133,68 @@ function TaskModal({ projectId, task, onClose }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl my-4">
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+        {/* En-tête fixe */}
+        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between shrink-0">
           <h2 className="font-semibold text-white">{isEdit ? "Modifier la tâche" : "Nouvelle tâche"}</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          <Input id="title" label="Titre *" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="ex : Développer le module d'authentification" />
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-slate-300">Description</label>
-            <textarea rows={2} value={description} onChange={(e) => setDesc(e.target.value)}
-              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-              placeholder="Détails de la tâche…" />
-          </div>
 
-          {/* Classification */}
-          <div className="border border-slate-700 rounded-xl overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setShowClassif(!showClassif)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-slate-800/50 text-sm font-medium text-slate-300 hover:bg-slate-800"
-            >
-              <span className="flex items-center gap-2"><Brain className="w-4 h-4 text-indigo-400" />Classification méthodologique</span>
-              {showClassif ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-            {showClassif && (
-              <div className="p-4 space-y-4">
-                {Object.entries(SCORE_LABELS).map(([key, label]) => (
-                  <ScoreSlider key={key} label={label} value={scores[key as keyof typeof scores]}
-                    onChange={(v) => handleScore(key, v)} />
-                ))}
-                {(preview.methodology_recommendation || task?.methodology_recommendation) && (
-                  <RecommendationBadge task={Object.keys(preview).length ? preview : task!} />
-                )}
-              </div>
-            )}
-          </div>
+        {/* Contenu scrollable */}
+        <div className="overflow-y-auto flex-1">
+          <form onSubmit={handleSubmit} className="p-6 space-y-5">
+            <Input id="title" label="Titre *" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="ex : Développer le module d'authentification" />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-300">Description</label>
+              <textarea rows={2} value={description} onChange={(e) => setDesc(e.target.value)}
+                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                placeholder="Détails de la tâche…" />
+            </div>
 
-          {/* Méthode appliquée */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-slate-300">Méthode appliquée</label>
-            <select value={methodology} onChange={(e) => setMethodology(e.target.value)}
-              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-              <option value="">— Suivre la recommandation —</option>
-              <option value="cycle_v">Cycle en V</option>
-              <option value="agile">Agile</option>
-              <option value="hybrid">Hybride</option>
-            </select>
-          </div>
+            {/* Classification */}
+            <div className="border border-slate-700 rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowClassif(!showClassif)}
+                className="w-full flex items-center justify-between px-4 py-3 bg-slate-800/50 text-sm font-medium text-slate-300 hover:bg-slate-800"
+              >
+                <span className="flex items-center gap-2"><Brain className="w-4 h-4 text-indigo-400" />Classification méthodologique</span>
+                {showClassif ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+              {showClassif && (
+                <div className="p-4 space-y-4">
+                  {Object.entries(SCORE_LABELS).map(([key, label]) => (
+                    <ScoreSlider key={key} label={label} value={scores[key as keyof typeof scores]}
+                      onChange={(v) => handleScore(key, v)} />
+                  ))}
+                  {(preview.methodology_recommendation || task?.methodology_recommendation) && (
+                    <RecommendationBadge task={Object.keys(preview).length ? preview : task!} />
+                  )}
+                </div>
+              )}
+            </div>
 
-          <div className="flex gap-3 pt-2">
-            <Button type="button" variant="secondary" onClick={onClose} className="flex-1 justify-center">Annuler</Button>
-            <Button type="submit" loading={createTask.isPending || updateTask.isPending} className="flex-1 justify-center">
-              {isEdit ? "Enregistrer" : "Créer la tâche"}
-            </Button>
-          </div>
-        </form>
+            {/* Méthode appliquée */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-300">Méthode appliquée</label>
+              <select value={methodology} onChange={(e) => setMethodology(e.target.value)}
+                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="">— Suivre la recommandation —</option>
+                <option value="cycle_v">Cycle en V</option>
+                <option value="agile">Agile</option>
+                <option value="hybrid">Hybride</option>
+              </select>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <Button type="button" variant="secondary" onClick={onClose} className="flex-1 justify-center">Annuler</Button>
+              <Button type="submit" loading={createTask.isPending || updateTask.isPending} className="flex-1 justify-center">
+                {isEdit ? "Enregistrer" : "Créer la tâche"}
+              </Button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );
