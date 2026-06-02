@@ -28,9 +28,9 @@ export default function SettingsPage() {
         .update({ full_name: fullName, job_title: jobTitle, organization })
         .eq("id", user!.id)
         .select()
-        .single();
+        .limit(1);
       if (error) throw error;
-      setProfile(data);
+      setProfile(data?.[0] ?? null);
       toast.success("Profil mis à jour !");
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Erreur lors de la sauvegarde");
