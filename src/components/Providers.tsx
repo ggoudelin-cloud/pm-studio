@@ -16,14 +16,18 @@ function AuthListener() {
   const { setUser, setSession, setProfile, setLoading } = useAuthStore();
 
   useEffect(() => {
-    // getSession() lit le cache local (localStorage) → résout loading immédiatement
+    // Timeout de sécurité : 2s max pour résoudre le loading
+    const timeout = setTimeout(() => setLoading(false), 2000);
+
+    // getSession() lit depuis localStorage → résout loading sans attendre le réseau
     supabase.auth.getSession().then(({ data: { session } }) => {
+      clearTimeout(timeout);
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch(() => { clearTimeout(timeout); setLoading(false); });
 
-    // onAuthStateChange gère les changements d'état (login, logout, refresh token)
+    // onAuthStateChange gère login/logout/refresh en temps réel
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         setSession(session);
@@ -49,7 +53,7 @@ function AuthListener() {
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => { clearTimeout(timeout); subscription.unsubscribe(); };
   }, [setUser, setSession, setProfile, setLoading]);
 
   return null;

@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import { useNotifications, useMarkNotificationRead } from "@/hooks/useProjects";
+import { useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { useState, useRef, useEffect } from "react";
 
@@ -66,16 +67,25 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { profile, user } = useAuthStore();
+  const { profile, user, reset } = useAuthStore();
   const router = useRouter();
+  const qc = useQueryClient();
   const { data: notifications = [] } = useNotifications();
   const [showNotifs, setShowNotifs] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const unreadCount = notifications.filter(n => !n.read).length;
 
   async function handleLogout() {
-    await supabase.auth.signOut();
-    toast.success("Déconnecté");
-    router.replace("/login/");
+    setLoggingOut(true);
+    try {
+      await supabase.auth.signOut();
+      reset();
+      qc.clear();
+      router.replace("/login/");
+    } catch {
+      toast.error("Erreur lors de la déconnexion");
+      setLoggingOut(false);
+    }
   }
 
   return (
@@ -144,9 +154,13 @@ export default function Sidebar() {
         </Link>
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-colors"
+          disabled={loggingOut}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-slate-800 hover:text-red-400 transition-colors disabled:opacity-50"
         >
-          <LogOut className="w-4 h-4" />
+          {loggingOut
+            ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            : <LogOut className="w-4 h-4" />
+          }
           Déconnexion
         </button>
         <div className="mt-3 px-3 py-2.5 bg-slate-800/50 rounded-lg">
