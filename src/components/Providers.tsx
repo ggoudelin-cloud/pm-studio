@@ -16,16 +16,15 @@ function AuthListener() {
   const { setUser, setSession, setProfile, setLoading } = useAuthStore();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    // Fallback : forcer loading=false après 4s si rien ne répond
+    const timeout = setTimeout(() => setLoading(false), 4000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
+        clearTimeout(timeout);
         setSession(session);
         setUser(session?.user ?? null);
+
         if (session?.user) {
           try {
             const { data } = await supabase
@@ -41,11 +40,15 @@ function AuthListener() {
         } else {
           setProfile(null);
         }
+
         setLoading(false);
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, [setUser, setSession, setProfile, setLoading]);
 
   return null;
