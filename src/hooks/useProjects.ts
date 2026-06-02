@@ -36,9 +36,8 @@ export function useCreateProject() {
   return useMutation({
     mutationFn: async (values: Partial<Project> & { name: string }) => {
       const { data: { user } } = await supabase.auth.getUser();
-      const { data, error } = await DB().from("projects").insert({ ...values, owner_id: user!.id }).select().single();
+      const { error } = await DB().from("projects").insert({ ...values, owner_id: user!.id });
       if (error) throw error;
-      return data as Project;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["projects"] });
@@ -52,9 +51,9 @@ export function useUpdateProject() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...values }: Partial<Project> & { id: string }) => {
-      const { data, error } = await DB().from("projects").update(values).eq("id", id).select().single();
+      const { error } = await DB().from("projects").update(values).eq("id", id);
       if (error) throw error;
-      return data as Project;
+      return { id } as Pick<Project, "id">;
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["project", data.id] });
@@ -86,9 +85,9 @@ export function useCreateTask() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: Partial<Task> & { project_id: string; title: string }) => {
-      const { data, error } = await DB().from("tasks").insert(values).select().single();
+      const { error } = await DB().from("tasks").insert(values);
       if (error) throw error;
-      return data as Task;
+      return { project_id: values.project_id } as Pick<Task, "project_id">;
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["tasks", data.project_id] });
@@ -102,9 +101,9 @@ export function useUpdateTask() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, project_id, ...values }: Partial<Task> & { id: string; project_id: string }) => {
-      const { data, error } = await DB().from("tasks").update(values).eq("id", id).select().single();
+      const { error } = await DB().from("tasks").update(values).eq("id", id);
       if (error) throw error;
-      return { ...data, project_id } as Task;
+      return { project_id } as Pick<Task, "project_id">;
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["tasks", data.project_id] });
