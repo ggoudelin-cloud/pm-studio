@@ -43,13 +43,15 @@ function minStartAfterPred(predTask: Task, lagDays: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function EditDatesModal({ task, tasks, deps, onClose }: {
+function EditDatesModal({ task, tasks, deps, projectId, onClose }: {
   task: Task;
   tasks: Task[];
   deps: { id: string; task_id: string; predecessor_id: string; lag_days: number }[];
+  projectId: string;
   onClose: () => void;
 }) {
-  const update = useUpdateTask();
+  const update    = useUpdateTask();
+  const removeDep = useRemoveDependency();
   const [start, setStart] = useState((task as Task & { start_date?: string }).start_date ?? "");
   const [end, setEnd]     = useState(task.due_date ?? "");
   const [error, setError] = useState("");
@@ -102,16 +104,32 @@ function EditDatesModal({ task, tasks, deps, onClose }: {
         </div>
 
         {predecessors.length > 0 && (
-          <div className="bg-slate-800/50 rounded-lg p-2.5 space-y-1">
-            <p className="text-xs text-slate-500 font-medium">Contraintes prédécesseurs :</p>
+          <div className="bg-slate-800/50 rounded-lg p-2.5 space-y-1.5">
+            <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">Prédécesseurs</p>
             {predecessors.map(({ dep, pred }) => {
               const min = minStartAfterPred(pred!, dep.lag_days);
               return (
-                <p key={dep.id} className="text-xs text-indigo-300">
-                  ← {pred!.title} — début après le{" "}
-                  <span className="font-medium">{min ? new Date(min).toLocaleDateString("fr-FR") : "?"}</span>
-                  {dep.lag_days > 0 && ` (+${dep.lag_days}j)`}
-                </p>
+                <div key={dep.id} className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-indigo-300 truncate">
+                      ← {pred!.title}
+                      {dep.lag_days > 0 && <span className="text-slate-500"> +{dep.lag_days}j</span>}
+                    </p>
+                    {min && (
+                      <p className="text-xs text-slate-500">
+                        début au plus tôt le {new Date(min).toLocaleDateString("fr-FR")}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeDep.mutate({ id: dep.id, projectId })}
+                    className="shrink-0 text-slate-600 hover:text-red-400 transition-colors"
+                    title="Supprimer ce prédécesseur"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -496,7 +514,7 @@ function GanttContent() {
         )}
       </div>
 
-      {editTask && <EditDatesModal task={editTask} tasks={tasks} deps={deps} onClose={() => setEditTask(null)} />}
+      {editTask && id && <EditDatesModal task={editTask} tasks={tasks} deps={deps} projectId={id} onClose={() => setEditTask(null)} />}
       {depTask  && id && <AddDepModal task={depTask} tasks={tasks} deps={deps} projectId={id} onClose={() => setDepTask(null)} />}
     </DashboardLayout>
   );
