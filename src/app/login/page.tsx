@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { useAuthStore } from "@/stores/auth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Layers } from "lucide-react";
@@ -10,6 +11,7 @@ import toast from "react-hot-toast";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { setUser, setSession } = useAuthStore();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -21,10 +23,14 @@ export default function LoginPage() {
     setLoading(true);
 
     if (mode === "login") {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         toast.error(error.message);
       } else {
+        // Mettre à jour le store immédiatement avant la navigation
+        // pour éviter la race condition avec onAuthStateChange
+        setUser(data.user);
+        setSession(data.session);
         toast.success("Connexion réussie !");
         router.replace("/dashboard/");
       }
