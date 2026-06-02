@@ -432,7 +432,7 @@ export function useProjectMembers(projectId: string | null) {
     queryFn: async () => {
       const { data, error } = await DB()
         .from("project_members")
-        .select("*, profiles(id, full_name, job_title, email)")
+        .select("*, profiles!project_members_user_profiles_fkey(id, full_name, job_title, email)")
         .eq("project_id", projectId!);
       if (error) throw error;
       return data as (ProjectMember & { profiles: { id: string; full_name: string | null; job_title: string | null; email: string | null } })[];
