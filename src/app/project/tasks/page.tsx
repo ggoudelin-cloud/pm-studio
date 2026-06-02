@@ -1,0 +1,316 @@
+"use client";
+
+import { useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { useTasks, useCreateTask, useUpdateTask } from "@/hooks/useProjects";
+import DashboardLayout from "@/components/layout/DashboardLayout";
+import { Card, CardBody, CardHeader } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { getMethodologyLabel, getMethodologyColor, getStatusLabel } from "@/lib/utils";
+import { Plus, X, Brain, ChevronDown, ChevronUp } from "lucide-react";
+import type { Task, Methodology } from "@/types";
+import type { BadgeVariant } from "@/components/ui/Badge";
+
+const SCORE_LABELS: Record<string, string> = {
+  score_stability:         "Stabilité des exigences",
+  score_complexity:        "Complexité fonctionnelle",
+  score_doc_dependency:    "Dépendances documentaires",
+  score_change_frequency:  "Fréquence de changement",
+  score_criticality:       "Criticité métier",
+  score_innovation:        "Innovation / Incertitude",
+  score_client_validation: "Validation client requise",
+  score_team_experience:   "Expérience équipe",
+};
+
+function ScoreSlider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex justify-between text-xs">
+        <span className="text-slate-400">{label}</span>
+        <span className="text-indigo-400 font-medium">{value}/5</span>
+      </div>
+      <input
+        type="range" min={1} max={5} value={value}
+        onChange={(e) => onChange(parseInt(e.target.value))}
+        className="w-full h-1.5 bg-slate-700 rounded-full appearance-none cursor-pointer accent-indigo-500"
+      />
+      <div className="flex justify-between text-xs text-slate-600">
+        <span>Faible</span><span>Fort</span>
+      </div>
+    </div>
+  );
+}
+
+function RecommendationBadge({ task }: { task: Partial<Task> }) {
+  if (!task.methodology_recommendation) return null;
+  const v = task.decision_score_v ?? 0;
+  const a = task.decision_score_agile ?? 0;
+  const total = v + a || 1;
+  const pctV = Math.round((v / total) * 100);
+
+  return (
+    <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700 space-y-2">
+      <div className="flex items-center gap-2">
+        <Brain className="w-4 h-4 text-indigo-400" />
+        <span className="text-xs font-medium text-slate-300">Recommandation moteur</span>
+        <Badge variant={getMethodologyColor(task.methodology_recommendation) as BadgeVariant}>
+          {getMethodologyLabel(task.methodology_recommendation)}
+        </Badge>
+      </div>
+      <div className="flex gap-1 h-2 rounded-full overflow-hidden">
+        <div className="bg-blue-500 transition-all" style={{ width: `${pctV}%` }} title={`Cycle en V ${pctV}%`} />
+        <div className="bg-green-500 transition-all" style={{ width: `${100 - pctV}%` }} title={`Agile ${100 - pctV}%`} />
+      </div>
+      <div className="flex justify-between text-xs text-slate-500">
+        <span>Cycle en V {pctV}%</span>
+        <span>Agile {100 - pctV}%</span>
+      </div>
+      {task.recommendation_reason && (
+        <p className="text-xs text-slate-400 italic">{task.recommendation_reason}</p>
+      )}
+    </div>
+  );
+}
+
+function TaskModal({ projectId, task, onClose }: {
+  projectId: string;
+  task?: Task;
+  onClose: () => void;
+}) {
+  const createTask = useCreateTask();
+  const updateTask = useUpdateTask();
+  const isEdit = !!task;
+
+  const [title, setTitle]             = useState(task?.title ?? "");
+  const [description, setDesc]        = useState(task?.description ?? "");
+  const [scores, setScores]           = useState({
+    score_stability:         task?.score_stability ?? 3,
+    score_complexity:        task?.score_complexity ?? 3,
+    score_doc_dependency:    task?.score_doc_dependency ?? 3,
+    score_change_frequency:  task?.score_change_frequency ?? 3,
+    score_criticality:       task?.score_criticality ?? 3,
+    score_innovation:        task?.score_innovation ?? 3,
+    score_client_validation: task?.score_client_validation ?? 3,
+    score_team_experience:   task?.score_team_experience ?? 3,
+  });
+  const [methodology, setMethodology] = useState<string>(task?.methodology ?? "");
+  const [preview, setPreview]         = useState<Partial<Task>>({});
+  const [showClassif, setShowClassif] = useState(!isEdit);
+
+  function computePreview(s: typeof scores) {
+    const v = s.score_stability * 5 + s.score_criticality * 4 + s.score_doc_dependency * 4 + s.score_client_validation * 3;
+    const a = (6 - s.score_stability) * 5 + s.score_change_frequency * 4 + s.score_innovation * 4 + s.score_complexity * 3;
+    const rec: Methodology = v - a > 15 ? "cycle_v" : a - v > 15 ? "agile" : "hybrid";
+    setPreview({ decision_score_v: v, decision_score_agile: a, methodology_recommendation: rec,
+      recommendation_reason: rec === "cycle_v" ? "Exigences stables, criticité et documentation élevées." :
+        rec === "agile" ? "Forte incertitude, changements fréquents." : "Profil mixte — approche hybride recommandée." });
+  }
+
+  function handleScore(key: string, val: number) {
+    const next = { ...scores, [key]: val };
+    setScores(next);
+    computePreview(next);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const payload = {
+      project_id: projectId,
+      title,
+      description: description || null,
+      methodology: (methodology as Methodology) || null,
+      ...scores,
+    };
+    if (isEdit) {
+      await updateTask.mutateAsync({ id: task!.id, ...payload });
+    } else {
+      await createTask.mutateAsync(payload);
+    }
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl my-4">
+        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+          <h2 className="font-semibold text-white">{isEdit ? "Modifier la tâche" : "Nouvelle tâche"}</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          <Input id="title" label="Titre *" value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="ex : Développer le module d'authentification" />
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-slate-300">Description</label>
+            <textarea rows={2} value={description} onChange={(e) => setDesc(e.target.value)}
+              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+              placeholder="Détails de la tâche…" />
+          </div>
+
+          {/* Classification */}
+          <div className="border border-slate-700 rounded-xl overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowClassif(!showClassif)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-slate-800/50 text-sm font-medium text-slate-300 hover:bg-slate-800"
+            >
+              <span className="flex items-center gap-2"><Brain className="w-4 h-4 text-indigo-400" />Classification méthodologique</span>
+              {showClassif ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+            {showClassif && (
+              <div className="p-4 space-y-4">
+                {Object.entries(SCORE_LABELS).map(([key, label]) => (
+                  <ScoreSlider key={key} label={label} value={scores[key as keyof typeof scores]}
+                    onChange={(v) => handleScore(key, v)} />
+                ))}
+                {(preview.methodology_recommendation || task?.methodology_recommendation) && (
+                  <RecommendationBadge task={Object.keys(preview).length ? preview : task!} />
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Méthode appliquée */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-slate-300">Méthode appliquée</label>
+            <select value={methodology} onChange={(e) => setMethodology(e.target.value)}
+              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="">— Suivre la recommandation —</option>
+              <option value="cycle_v">Cycle en V</option>
+              <option value="agile">Agile</option>
+              <option value="hybrid">Hybride</option>
+            </select>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" onClick={onClose} className="flex-1 justify-center">Annuler</Button>
+            <Button type="submit" loading={createTask.isPending || updateTask.isPending} className="flex-1 justify-center">
+              {isEdit ? "Enregistrer" : "Créer la tâche"}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  todo: "text-slate-400", in_progress: "text-indigo-400", review: "text-amber-400",
+  blocked: "text-red-400", done: "text-green-400", cancelled: "text-slate-600",
+};
+
+function TasksPageContent() {
+  const searchParams = useSearchParams();
+  const id = searchParams.get("id");
+  const { data: tasks, isLoading } = useTasks(id);
+  const [showModal, setShowModal] = useState(false);
+  const [editTask, setEditTask]   = useState<Task | undefined>();
+  const [filterM, setFilterM]     = useState("");
+
+  const filtered = tasks?.filter((t) => !filterM || t.methodology === filterM || t.methodology_recommendation === filterM) ?? [];
+
+  return (
+    <DashboardLayout>
+      <div className="p-8 max-w-6xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-sm text-slate-500 mb-1">
+              <Link href={`/project/?id=${id}`} className="hover:text-slate-300">← Projet</Link>
+            </div>
+            <h1 className="text-2xl font-bold text-white">Tâches & Classification</h1>
+            <p className="text-slate-400 text-sm mt-1">{tasks?.length ?? 0} tâche(s)</p>
+          </div>
+          <Button onClick={() => { setEditTask(undefined); setShowModal(true); }}>
+            <Plus className="w-4 h-4" /> Nouvelle tâche
+          </Button>
+        </div>
+
+        {/* Filtres */}
+        <div className="flex gap-2 flex-wrap">
+          {["", "cycle_v", "agile", "hybrid"].map((m) => (
+            <button key={m} onClick={() => setFilterM(m)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                filterM === m ? "bg-indigo-600 border-indigo-500 text-white" : "border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-300"
+              }`}>
+              {m ? getMethodologyLabel(m) : "Toutes"}
+            </button>
+          ))}
+        </div>
+
+        {isLoading ? (
+          <div className="py-16 flex justify-center">
+            <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : !filtered.length ? (
+          <div className="py-16 text-center">
+            <p className="text-slate-400">Aucune tâche. Commencez par en créer une.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filtered.map((task) => (
+              <Card key={task.id} className="hover:border-slate-700 transition-colors">
+                <CardBody>
+                  <div className="flex items-start gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-medium text-slate-100">{task.title}</h3>
+                        {task.methodology_recommendation && (
+                          <Badge variant={getMethodologyColor(task.methodology_recommendation) as BadgeVariant}>
+                            {getMethodologyLabel(task.methodology_recommendation)}
+                          </Badge>
+                        )}
+                        {task.methodology && task.methodology !== task.methodology_recommendation && (
+                          <Badge variant="amber">Appliqué: {getMethodologyLabel(task.methodology)}</Badge>
+                        )}
+                      </div>
+                      {task.description && (
+                        <p className="text-sm text-slate-400 mt-1 line-clamp-1">{task.description}</p>
+                      )}
+                      {task.decision_score_v !== null && (
+                        <div className="mt-2 flex items-center gap-3">
+                          <div className="flex gap-1 h-1.5 rounded-full overflow-hidden w-24">
+                            <div className="bg-blue-500" style={{ width: `${Math.round((task.decision_score_v / (task.decision_score_v + (task.decision_score_agile ?? 0) || 1)) * 100)}%` }} />
+                            <div className="bg-green-500 flex-1" />
+                          </div>
+                          <span className="text-xs text-slate-500">
+                            V:{task.decision_score_v} / A:{task.decision_score_agile}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className={`text-xs font-medium ${STATUS_COLORS[task.status] ?? "text-slate-400"}`}>
+                        {getStatusLabel(task.status)}
+                      </span>
+                      <button
+                        onClick={() => { setEditTask(task); setShowModal(true); }}
+                        className="text-xs text-slate-500 hover:text-slate-300 px-2 py-1 rounded border border-slate-700 hover:border-slate-600 transition-colors"
+                      >
+                        Modifier
+                      </button>
+                    </div>
+                  </div>
+                </CardBody>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {showModal && id && (
+        <TaskModal projectId={id} task={editTask} onClose={() => { setShowModal(false); setEditTask(undefined); }} />
+      )}
+    </DashboardLayout>
+  );
+}
+
+const Spinner = () => (
+  <div className="min-h-screen flex items-center justify-center bg-slate-950">
+    <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+  </div>
+);
+
+export default function TasksPage() {
+  return <Suspense fallback={<Spinner />}><TasksPageContent /></Suspense>;
+}
