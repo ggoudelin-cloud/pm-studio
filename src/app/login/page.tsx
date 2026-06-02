@@ -32,7 +32,10 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: fullName } },
+        options: {
+          data: { full_name: fullName },
+          emailRedirectTo: "https://pm.mg-softwares.fr/",
+        },
       });
       if (error) {
         toast.error(error.message);
