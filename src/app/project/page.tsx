@@ -15,6 +15,7 @@ import { getMethodologyLabel, getMethodologyColor, getStatusLabel, formatDate } 
 import {
   KanbanSquare, GitBranch, ListTodo, ArrowRight, CalendarDays,
   Banknote, Users, Download, X, Edit2, Package, RefreshCw, GitMerge, Trash2,
+  DollarSign, Milestone,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import type { Project } from "@/types";
@@ -97,6 +98,8 @@ function ProjectNav({ id }: { id: string }) {
     { href: `/project/deliverables/?id=${id}`,  label: "Livrables",             icon: Package,     desc: "Gérez les livrables et leur statut de validation" },
     { href: `/project/retrospectives/?id=${id}`, label: "Rétrospectives",        icon: RefreshCw,   desc: "Capturez les retours d'expérience de chaque sprint" },
     { href: `/project/traceability/?id=${id}`,  label: "Traçabilité",           icon: GitMerge,    desc: "Liez exigences, tâches et cas de tests" },
+    { href: `/project/milestones/?id=${id}`,     label: "Jalons",                icon: Milestone,   desc: "Suivez les jalons clés et leur statut d'atteinte" },
+    { href: `/project/costs/?id=${id}`,         label: "Gestion des coûts",     icon: DollarSign,  desc: "Ressources humaines, logiciels, infrastructure" },
     { href: `/project/team/?id=${id}`,          label: "Équipe",                icon: Users,       desc: "Gérez les membres et leurs rôles sur le projet" },
   ];
 

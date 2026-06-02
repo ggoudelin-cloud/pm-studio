@@ -289,6 +289,32 @@ export function useMilestones(projectId: string | null) {
   });
 }
 
+export function useUpdateMilestone() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, project_id, ...values }: Partial<Milestone> & { id: string; project_id: string }) => {
+      const { error } = await DB().from("milestones").update(values).eq("id", id);
+      if (error) throw error;
+      return { project_id };
+    },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["milestones", d.project_id] }); toast.success("Jalon mis à jour."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useDeleteMilestone() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, project_id }: { id: string; project_id: string }) => {
+      const { error } = await DB().from("milestones").delete().eq("id", id);
+      if (error) throw error;
+      return { project_id };
+    },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["milestones", d.project_id] }); toast.success("Jalon supprimé."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
 export function useCreateMilestone() {
   const qc = useQueryClient();
   return useMutation({
@@ -492,6 +518,59 @@ export function useUpdateMemberRole() {
       return { projectId };
     },
     onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["members", d.projectId] }); toast.success("Rôle mis à jour."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+// ── Project Costs ─────────────────────────────────────────────────────────────
+export function useProjectCosts(projectId: string | null) {
+  const { user } = useAuthStore();
+  return useQuery({
+    queryKey: ["costs", projectId],
+    enabled: !!projectId && !!user,
+    queryFn: async () => {
+      const { data, error } = await DB().from("project_costs").select("*").eq("project_id", projectId!).order("category").order("created_at");
+      if (error) throw error;
+      return data as import("@/types").ProjectCost[];
+    },
+  });
+}
+
+export function useCreateCost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (values: Omit<import("@/types").ProjectCost, "id" | "created_at" | "updated_at">) => {
+      const { error } = await DB().from("project_costs").insert(values);
+      if (error) throw error;
+      return { project_id: values.project_id };
+    },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["costs", d.project_id] }); toast.success("Coût ajouté !"); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useUpdateCost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, project_id, ...values }: Partial<import("@/types").ProjectCost> & { id: string; project_id: string }) => {
+      const { error } = await DB().from("project_costs").update(values).eq("id", id);
+      if (error) throw error;
+      return { project_id };
+    },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["costs", d.project_id] }); toast.success("Coût mis à jour."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useDeleteCost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, project_id }: { id: string; project_id: string }) => {
+      const { error } = await DB().from("project_costs").delete().eq("id", id);
+      if (error) throw error;
+      return { project_id };
+    },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["costs", d.project_id] }); toast.success("Coût supprimé."); },
     onError: (e: Error) => toast.error(e.message),
   });
 }

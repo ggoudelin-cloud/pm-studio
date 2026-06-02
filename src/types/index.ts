@@ -219,6 +219,23 @@ export interface Notification {
   created_at: string;
 }
 
+export type CostCategory = "human" | "software" | "infrastructure" | "other";
+
+export interface ProjectCost {
+  id: string;
+  project_id: string;
+  category: CostCategory;
+  label: string;
+  unit: string;
+  quantity: number;
+  unit_cost_ht: number;
+  vat_rate: number;
+  member_id: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface TraceabilityLink {
   id: string;
   project_id: string;
