@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { useAuthStore } from "@/stores/auth";
 import type {
   Project, Task, Sprint, UserStory, ProjectPhase, Milestone,
   ProjectMember, MemberRole,
@@ -12,8 +13,10 @@ const DB = () => supabase.schema("hybridpm");
 
 // ── Projects ────────────────────────────────────────────────────────────────
 export function useProjects() {
+  const { user } = useAuthStore();
   return useQuery({
     queryKey: ["projects"],
+    enabled: !!user,
     queryFn: async () => {
       const { data, error } = await DB().from("projects").select("*").order("created_at", { ascending: false });
       if (error) throw error;
@@ -23,9 +26,10 @@ export function useProjects() {
 }
 
 export function useProject(id: string | null) {
+  const { user } = useAuthStore();
   return useQuery({
     queryKey: ["project", id],
-    enabled: !!id,
+    enabled: !!id && !!user,
     queryFn: async () => {
       const { data, error } = await DB().from("projects").select("*").eq("id", id!).limit(1);
       if (error) throw error;
@@ -66,9 +70,10 @@ export function useUpdateProject() {
 
 // ── Tasks ───────────────────────────────────────────────────────────────────
 export function useTasks(projectId: string | null) {
+  const { user } = useAuthStore();
   return useQuery({
     queryKey: ["tasks", projectId],
-    enabled: !!projectId,
+    enabled: !!projectId && !!user,
     queryFn: async () => {
       const { data, error } = await DB()
         .from("tasks")
@@ -131,9 +136,10 @@ export function useDeleteTask() {
 
 // ── Task Dependencies ───────────────────────────────────────────────────────
 export function useTaskDependencies(projectId: string | null) {
+  const { user } = useAuthStore();
   return useQuery({
     queryKey: ["task-deps", projectId],
-    enabled: !!projectId,
+    enabled: !!projectId && !!user,
     queryFn: async () => {
       const { data, error } = await DB()
         .from("task_dependencies")
@@ -172,9 +178,10 @@ export function useRemoveDependency() {
 
 // ── Sprints ─────────────────────────────────────────────────────────────────
 export function useSprints(projectId: string | null) {
+  const { user } = useAuthStore();
   return useQuery({
     queryKey: ["sprints", projectId],
-    enabled: !!projectId,
+    enabled: !!projectId && !!user,
     queryFn: async () => {
       const { data, error } = await DB().from("sprints").select("*").eq("project_id", projectId!).order("created_at");
       if (error) throw error;
@@ -185,9 +192,10 @@ export function useSprints(projectId: string | null) {
 
 // ── User Stories ────────────────────────────────────────────────────────────
 export function useUserStories(projectId: string | null) {
+  const { user } = useAuthStore();
   return useQuery({
     queryKey: ["stories", projectId],
-    enabled: !!projectId,
+    enabled: !!projectId && !!user,
     queryFn: async () => {
       const { data, error } = await DB()
         .from("user_stories")
@@ -202,9 +210,10 @@ export function useUserStories(projectId: string | null) {
 
 // ── Epics ───────────────────────────────────────────────────────────────────
 export function useEpics(projectId: string | null) {
+  const { user } = useAuthStore();
   return useQuery({
     queryKey: ["epics", projectId],
-    enabled: !!projectId,
+    enabled: !!projectId && !!user,
     queryFn: async () => {
       const { data, error } = await DB().from("epics").select("*").eq("project_id", projectId!).order("created_at");
       if (error) throw error;
@@ -254,9 +263,10 @@ export function useDeleteEpic() {
 
 // ── Phases ──────────────────────────────────────────────────────────────────
 export function usePhases(projectId: string | null) {
+  const { user } = useAuthStore();
   return useQuery({
     queryKey: ["phases", projectId],
-    enabled: !!projectId,
+    enabled: !!projectId && !!user,
     queryFn: async () => {
       const { data, error } = await DB().from("project_phases").select("*").eq("project_id", projectId!).order("position");
       if (error) throw error;
@@ -267,9 +277,10 @@ export function usePhases(projectId: string | null) {
 
 // ── Milestones ──────────────────────────────────────────────────────────────
 export function useMilestones(projectId: string | null) {
+  const { user } = useAuthStore();
   return useQuery({
     queryKey: ["milestones", projectId],
-    enabled: !!projectId,
+    enabled: !!projectId && !!user,
     queryFn: async () => {
       const { data, error } = await DB().from("milestones").select("*").eq("project_id", projectId!).order("due_date");
       if (error) throw error;
@@ -403,8 +414,10 @@ export function useAddComment() {
 
 // ── Notifications ─────────────────────────────────────────────────────────────
 export function useNotifications() {
+  const { user } = useAuthStore();
   return useQuery({
     queryKey: ["notifications"],
+    enabled: !!user,
     queryFn: async () => {
       const { data, error } = await DB().from("notifications").select("*").order("created_at", { ascending: false }).limit(30);
       if (error) throw error;
@@ -426,9 +439,10 @@ export function useMarkNotificationRead() {
 
 // ── Team / Members ────────────────────────────────────────────────────────────
 export function useProjectMembers(projectId: string | null) {
+  const { user } = useAuthStore();
   return useQuery({
     queryKey: ["members", projectId],
-    enabled: !!projectId,
+    enabled: !!projectId && !!user,
     queryFn: async () => {
       const { data, error } = await DB()
         .from("project_members")
