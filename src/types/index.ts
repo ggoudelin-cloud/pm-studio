@@ -14,6 +14,9 @@ export interface Profile {
   job_title: string | null;
   organization: string | null;
   email: string | null;
+  daily_rate_ht: number | null;
+  daily_rate_ttc: number | null;
+  currency: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -71,6 +74,7 @@ export interface Task {
   decision_score_agile: number | null;
   methodology_recommendation: Methodology | null;
   recommendation_reason: string | null;
+  start_date: string | null;
   estimated_hours: number | null;
   actual_hours: number | null;
   due_date: string | null;

@@ -3,8 +3,8 @@
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useTasks, useCreateTask, useUpdateTask, useDeleteTask } from "@/hooks/useProjects";
-import { Trash2 } from "lucide-react";
+import { useTasks, useCreateTask, useUpdateTask, useDeleteTask, useTaskDependencies, useProjectMembers } from "@/hooks/useProjects";
+import { Trash2, CalendarDays, User, Link2 } from "lucide-react";
 import Comments from "@/components/Comments";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
@@ -84,10 +84,14 @@ function TaskModal({ projectId, task, onClose }: {
 }) {
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
+  const { data: members = [] } = useProjectMembers(projectId);
   const isEdit = !!task;
 
-  const [title, setTitle]             = useState(task?.title ?? "");
-  const [description, setDesc]        = useState(task?.description ?? "");
+  const [title,      setTitle]    = useState(task?.title ?? "");
+  const [description,setDesc]     = useState(task?.description ?? "");
+  const [assigneeId, setAssignee] = useState(task?.assignee_id ?? "");
+  const [startDate,  setStart]    = useState(task?.start_date ?? "");
+  const [dueDate,    setDue]      = useState(task?.due_date ?? "");
   const [scores, setScores]           = useState({
     score_stability:         task?.score_stability ?? 3,
     score_complexity:        task?.score_complexity ?? 3,
@@ -122,8 +126,11 @@ function TaskModal({ projectId, task, onClose }: {
     const payload = {
       project_id: projectId,
       title,
-      description: description || null,
-      methodology: (methodology as Methodology) || null,
+      description:  description || null,
+      assignee_id:  assigneeId  || null,
+      start_date:   startDate   || null,
+      due_date:     dueDate     || null,
+      methodology:  (methodology as Methodology) || null,
       ...scores,
     };
     if (isEdit) {
@@ -152,6 +159,36 @@ function TaskModal({ projectId, task, onClose }: {
               <textarea rows={2} value={description} onChange={(e) => setDesc(e.target.value)}
                 className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                 placeholder="Détails de la tâche…" />
+            </div>
+
+            {/* Assigné */}
+            {members.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-slate-300">Personne en charge</label>
+                <select value={assigneeId} onChange={e => setAssignee(e.target.value)}
+                  className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <option value="">— Non assigné —</option>
+                  {members.map(m => (
+                    <option key={m.user_id} value={m.user_id}>
+                      {m.profiles?.full_name ?? m.profiles?.email ?? m.user_id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Dates */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-slate-300">Date de début</label>
+                <input type="date" value={startDate} onChange={e => setStart(e.target.value)}
+                  className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-slate-300">Date de fin</label>
+                <input type="date" value={dueDate} min={startDate || undefined} onChange={e => setDue(e.target.value)}
+                  className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
             </div>
 
             {/* Classification */}
@@ -218,6 +255,8 @@ function TasksPageContent() {
   const searchParams = useSearchParams();
   const id = searchParams.get("id");
   const { data: tasks, isLoading } = useTasks(id);
+  const { data: deps    = [] }     = useTaskDependencies(id);
+  const { data: members = [] }     = useProjectMembers(id);
   const deleteTask = useDeleteTask();
   const [showModal,  setShowModal]  = useState(false);
   const [editTask,   setEditTask]   = useState<Task | undefined>();
@@ -264,7 +303,11 @@ function TasksPageContent() {
           </div>
         ) : (
           <div className="space-y-2">
-            {filtered.map((task) => (
+            {filtered.map((task) => {
+              const taskDeps  = deps.filter(d => d.task_id === task.id);
+              const assignee  = members.find(m => m.user_id === task.assignee_id);
+              const fmtDate   = (d: string | null | undefined) => d ? new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }) : null;
+              return (
               <Card key={task.id} className="hover:border-slate-700 transition-colors">
                 <CardBody>
                   <div className="flex items-start gap-4">
@@ -283,6 +326,30 @@ function TasksPageContent() {
                       {task.description && (
                         <p className="text-sm text-slate-400 mt-1 line-clamp-1">{task.description}</p>
                       )}
+
+                      {/* Dates, assigné, prédécesseurs */}
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                        {(task.start_date || task.due_date) && (
+                          <span className="flex items-center gap-1">
+                            <CalendarDays className="w-3 h-3" />
+                            {fmtDate(task.start_date) ?? "?"}
+                            {task.due_date && <> → {fmtDate(task.due_date)}</>}
+                          </span>
+                        )}
+                        {assignee && (
+                          <span className="flex items-center gap-1 text-indigo-400">
+                            <User className="w-3 h-3" />
+                            {assignee.profiles?.full_name ?? assignee.profiles?.email ?? "Assigné"}
+                          </span>
+                        )}
+                        {taskDeps.length > 0 && (
+                          <span className="flex items-center gap-1 text-amber-400/80">
+                            <Link2 className="w-3 h-3" />
+                            {taskDeps.length} prédécesseur{taskDeps.length > 1 ? "s" : ""}
+                          </span>
+                        )}
+                      </div>
+
                       {task.decision_score_v !== null && (
                         <div className="mt-2 flex items-center gap-3">
                           <div className="flex gap-1 h-1.5 rounded-full overflow-hidden w-24">
@@ -316,7 +383,8 @@ function TasksPageContent() {
                   </div>
                 </CardBody>
               </Card>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
