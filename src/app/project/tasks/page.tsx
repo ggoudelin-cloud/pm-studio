@@ -257,7 +257,8 @@ function TasksPageContent() {
   const { data: tasks, isLoading } = useTasks(id);
   const { data: deps    = [] }     = useTaskDependencies(id);
   const { data: members = [] }     = useProjectMembers(id);
-  const deleteTask = useDeleteTask();
+  const deleteTask  = useDeleteTask();
+  const updateTask  = useUpdateTask();
   const [showModal,  setShowModal]  = useState(false);
   const [editTask,   setEditTask]   = useState<Task | undefined>();
   const [filterM,    setFilterM]    = useState("");
@@ -362,13 +363,30 @@ function TasksPageContent() {
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className={`text-xs font-medium ${STATUS_COLORS[task.status] ?? "text-slate-400"}`}>
-                        {getStatusLabel(task.status)}
-                      </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Sélecteur de statut rapide */}
+                      <select
+                        value={task.status}
+                        onChange={e => updateTask.mutate({ id: task.id, project_id: task.project_id, status: e.target.value as Task["status"] })}
+                        className={`text-xs font-medium px-2.5 py-1.5 rounded-lg border bg-transparent cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${
+                          task.status === "done"        ? "border-green-700/50 text-green-400 hover:border-green-600" :
+                          task.status === "in_progress" ? "border-indigo-700/50 text-indigo-400 hover:border-indigo-600" :
+                          task.status === "review"      ? "border-amber-700/50 text-amber-400 hover:border-amber-600" :
+                          task.status === "blocked"     ? "border-red-700/50 text-red-400 hover:border-red-600" :
+                          task.status === "cancelled"   ? "border-slate-700 text-slate-500" :
+                          "border-slate-700 text-slate-400 hover:border-slate-600"
+                        }`}
+                      >
+                        <option value="todo"        className="bg-slate-900 text-slate-300">À faire</option>
+                        <option value="in_progress" className="bg-slate-900 text-indigo-300">En cours</option>
+                        <option value="review"      className="bg-slate-900 text-amber-300">En révision</option>
+                        <option value="blocked"     className="bg-slate-900 text-red-300">Bloqué</option>
+                        <option value="done"        className="bg-slate-900 text-green-300">Terminé</option>
+                        <option value="cancelled"   className="bg-slate-900 text-slate-400">Annulé</option>
+                      </select>
                       <button
                         onClick={() => { setEditTask(task); setShowModal(true); }}
-                        className="text-xs text-slate-500 hover:text-slate-300 px-2 py-1 rounded border border-slate-700 hover:border-slate-600 transition-colors"
+                        className="text-xs text-slate-500 hover:text-slate-300 px-2 py-1.5 rounded border border-slate-700 hover:border-slate-600 transition-colors"
                       >
                         Modifier
                       </button>
