@@ -97,7 +97,7 @@ export default function Sidebar() {
           </div>
           <div>
             <p className="text-sm font-bold text-white leading-none">PM Studio</p>
-            <p className="text-xs text-slate-500 mt-0.5">by MG Softwares</p>
+            <p className="text-xs text-slate-500 mt-0.5">by Consort France</p>
           </div>
         </div>
       </div>

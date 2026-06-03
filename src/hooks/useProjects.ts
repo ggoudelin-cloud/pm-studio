@@ -118,6 +118,21 @@ export function useUpdateTask() {
   });
 }
 
+export function useUpdateTaskSilent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, project_id, ...values }: Partial<Task> & { id: string; project_id: string }) => {
+      const { error } = await DB().from("tasks").update(values).eq("id", id);
+      if (error) throw error;
+      return { project_id };
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["tasks", data.project_id] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
 export function useDeleteTask() {
   const qc = useQueryClient();
   return useMutation({
@@ -464,6 +479,22 @@ export function useMarkNotificationRead() {
 }
 
 // ── Team / Members ────────────────────────────────────────────────────────────
+export function useMyMemberships() {
+  const { user } = useAuthStore();
+  return useQuery({
+    queryKey: ["my-memberships"],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await DB()
+        .from("project_members")
+        .select("project_id, role")
+        .eq("user_id", user!.id);
+      if (error) throw error;
+      return data as { project_id: string; role: MemberRole }[];
+    },
+  });
+}
+
 export function useProjectMembers(projectId: string | null) {
   const { user } = useAuthStore();
   return useQuery({
@@ -515,10 +546,25 @@ export function useUpdateMemberRole() {
     mutationFn: async ({ memberId, projectId, role }: { memberId: string; projectId: string; role: MemberRole }) => {
       const { error } = await DB().from("project_members").update({ role }).eq("id", memberId);
       if (error) throw error;
-      return { projectId };
+      return { projectId, memberId, role };
     },
-    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["members", d.projectId] }); toast.success("Rôle mis à jour."); },
-    onError: (e: Error) => toast.error(e.message),
+    onMutate: async ({ memberId, projectId, role }) => {
+      await qc.cancelQueries({ queryKey: ["members", projectId] });
+      const prev = qc.getQueryData(["members", projectId]);
+      qc.setQueryData(["members", projectId], (old: unknown) => {
+        if (!Array.isArray(old)) return old;
+        return old.map((m: { id: string }) => m.id === memberId ? { ...m, role } : m);
+      });
+      return { prev, projectId };
+    },
+    onError: (e: Error, _v, ctx) => {
+      if (ctx) qc.setQueryData(["members", ctx.projectId], ctx.prev);
+      toast.error(e.message);
+    },
+    onSuccess: (d) => {
+      qc.invalidateQueries({ queryKey: ["members", d.projectId] });
+      toast.success("Rôle mis à jour.");
+    },
   });
 }
 
@@ -597,6 +643,63 @@ export function useCreateTraceabilityLink() {
       return { project_id: values.project_id };
     },
     onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["traceability", d.project_id] }); toast.success("Lien créé."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+// ── Project Risks ─────────────────────────────────────────────────────────────
+export function useProjectRisks(projectId: string | null) {
+  const { user } = useAuthStore();
+  return useQuery({
+    queryKey: ["risks", projectId],
+    enabled: !!projectId && !!user,
+    queryFn: async () => {
+      const { data, error } = await DB()
+        .from("project_risks")
+        .select("*, profiles:owner_id(full_name, email)")
+        .eq("project_id", projectId!)
+        .order("weight", { ascending: false });
+      if (error) throw error;
+      return data as (import("@/types").ProjectRisk & { profiles: { full_name: string | null; email: string | null } | null })[];
+    },
+  });
+}
+
+export function useCreateRisk() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (values: Omit<import("@/types").ProjectRisk, "id" | "weight" | "created_at" | "updated_at">) => {
+      const { error } = await DB().from("project_risks").insert(values);
+      if (error) throw error;
+      return { project_id: values.project_id };
+    },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["risks", d.project_id] }); toast.success("Risque créé !"); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useUpdateRisk() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, project_id, ...values }: Partial<import("@/types").ProjectRisk> & { id: string; project_id: string }) => {
+      const { error } = await DB().from("project_risks").update(values).eq("id", id);
+      if (error) throw error;
+      return { project_id };
+    },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["risks", d.project_id] }); toast.success("Risque mis à jour."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useDeleteRisk() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, project_id }: { id: string; project_id: string }) => {
+      const { error } = await DB().from("project_risks").delete().eq("id", id);
+      if (error) throw error;
+      return { project_id };
+    },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["risks", d.project_id] }); toast.success("Risque supprimé."); },
     onError: (e: Error) => toast.error(e.message),
   });
 }

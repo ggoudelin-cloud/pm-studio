@@ -7,7 +7,7 @@ const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
 
 export const metadata: Metadata = {
   title: "PM Studio — Gestion de projet hybride",
-  description: "Pilotez vos projets en Agile, Cycle en V ou mode Hybride avec PM Studio by MG Softwares.",
+  description: "Pilotez vos projets en Agile, Cycle en V ou mode Hybride avec PM Studio by Consort France.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, Suspense, useMemo, useRef } from "react";
+import { useState, useEffect, Suspense, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useTasks, useTaskDependencies, useAddDependency, useRemoveDependency, useUpdateTask, useMilestones } from "@/hooks/useProjects";
+import { useTasks, useTaskDependencies, useAddDependency, useRemoveDependency, useUpdateTask, useUpdateTaskSilent, useMilestones } from "@/hooks/useProjects";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/Button";
 import { CalendarDays, ChevronLeft, ChevronRight, X, Link2, Milestone } from "lucide-react";
@@ -164,8 +164,8 @@ function AddDepModal({ task, tasks, deps, projectId, onClose }: {
   projectId: string;
   onClose: () => void;
 }) {
-  const addDep   = useAddDependency();
-  const update   = useUpdateTask();
+  const addDep = useAddDependency();
+  const update = useUpdateTaskSilent();
   const [predId, setPredId] = useState("");
   const [lag,    setLag]    = useState(0);
   const [error,  setError]  = useState("");
@@ -204,10 +204,20 @@ function AddDepModal({ task, tasks, deps, projectId, onClose }: {
     const err = validateSelection(predId, lag);
     if (err && !conflictDate) { setError(err); return; }
     await addDep.mutateAsync({ taskId: task.id, predecessorId: predId, lagDays: lag, projectId });
-    // Si conflit de dates, mettre à jour automatiquement la date de début
     if (conflictDate && minStart) {
-      await update.mutateAsync({ id: task.id, project_id: task.project_id, start_date: minStart } as Parameters<typeof update.mutateAsync>[0]);
-      toast.success(`Date de début ajustée au ${new Date(minStart).toLocaleDateString("fr-FR")}`);
+      // Préserver la durée de la tâche en décalant aussi due_date
+      const origStart = task.start_date ?? "";
+      const origEnd   = task.due_date ?? "";
+      const shiftedEnd = (origStart && origEnd)
+        ? addDays(new Date(minStart), diffDays(new Date(origStart), new Date(origEnd))).toISOString().slice(0, 10)
+        : undefined;
+      await update.mutateAsync({
+        id: task.id,
+        project_id: task.project_id,
+        start_date: minStart,
+        ...(shiftedEnd ? { due_date: shiftedEnd } : {}),
+      } as Parameters<typeof update.mutateAsync>[0]);
+      toast.success(`Dates décalées à partir du ${new Date(minStart).toLocaleDateString("fr-FR")}`);
     }
     onClose();
   }
@@ -260,18 +270,130 @@ function AddDepModal({ task, tasks, deps, projectId, onClose }: {
   );
 }
 
+type DragState = {
+  taskId: string;
+  edge: "left" | "right";
+  startX: number;
+  origStart: string;
+  origEnd: string;
+  previewStart: string;
+  previewEnd: string;
+};
+
 function GanttContent() {
   const searchParams = useSearchParams();
   const id = searchParams.get("id");
   const { data: tasks = [], isLoading } = useTasks(id);
   const { data: deps = [] } = useTaskDependencies(id);
   const { data: milestones = [] } = useMilestones(id);
-  const removeDep = useRemoveDependency();
+  const removeDep    = useRemoveDependency();
+  const update       = useUpdateTask();
+  const updateSilent = useUpdateTaskSilent();
 
   const [offsetDays, setOffsetDays] = useState(0);
   const [editTask,   setEditTask]   = useState<Task | null>(null);
   const [depTask,    setDepTask]    = useState<Task | null>(null);
-  const timelineRef = useRef<HTMLDivElement>(null);
+  const timelineRef    = useRef<HTMLDivElement>(null);
+  const dragRef        = useRef<DragState | null>(null);
+  const tasksRef       = useRef(tasks);
+  tasksRef.current     = tasks;
+  const depsRef        = useRef(deps);
+  depsRef.current      = deps;
+  const justDraggedRef = useRef(false);
+  const committingRef  = useRef(false);
+
+  const [drag, setDrag] = useState<DragState | null>(null);
+
+  function startResize(task: Task, edge: "left" | "right", clientX: number) {
+    const origStart = task.start_date ?? task.due_date ?? "";
+    const origEnd   = task.due_date ?? task.start_date ?? "";
+    const newDrag: DragState = { taskId: task.id, edge, startX: clientX, origStart, origEnd, previewStart: origStart, previewEnd: origEnd };
+    dragRef.current = newDrag;
+    setDrag(newDrag);
+  }
+
+  useEffect(() => {
+    function onMove(e: MouseEvent) {
+      const prev = dragRef.current;
+      if (!prev) return;
+      const daysDelta = Math.round((e.clientX - prev.startX) / DAY_W);
+      let updated: DragState;
+      if (prev.edge === "right") {
+        const newEnd  = addDays(new Date(prev.origEnd), daysDelta);
+        const minEnd  = new Date(prev.origStart);
+        updated = { ...prev, previewEnd: (newEnd >= minEnd ? newEnd : minEnd).toISOString().slice(0, 10) };
+      } else {
+        const newStart  = addDays(new Date(prev.origStart), daysDelta);
+        const maxStart  = new Date(prev.origEnd);
+        updated = { ...prev, previewStart: (newStart <= maxStart ? newStart : maxStart).toISOString().slice(0, 10) };
+      }
+      dragRef.current = updated;
+      setDrag(updated);
+    }
+
+    async function onUp() {
+      if (committingRef.current) return;
+      const d = dragRef.current;
+      dragRef.current = null;
+      setDrag(null);
+      if (!d || (d.previewStart === d.origStart && d.previewEnd === d.origEnd)) return;
+      justDraggedRef.current = true;
+      committingRef.current  = true;
+      const currentTasks = tasksRef.current;
+      const currentDeps  = depsRef.current;
+      const task = currentTasks.find(t => t.id === d.taskId);
+      if (!task) { committingRef.current = false; return; }
+      try {
+        await update.mutateAsync({
+          id: task.id, project_id: task.project_id,
+          start_date: d.previewStart || null,
+          due_date:   d.previewEnd   || null,
+        } as Partial<Task> & { id: string; project_id: string });
+
+        // Cascade BFS sur les successeurs
+        const taskMap = new Map(currentTasks.map(t => [t.id, { ...t }]));
+        taskMap.set(d.taskId, { ...task, start_date: d.previewStart, due_date: d.previewEnd });
+        const queue: { taskId: string; newEnd: string }[] = [{ taskId: d.taskId, newEnd: d.previewEnd }];
+        const visited = new Set<string>();
+        while (queue.length > 0) {
+          const { taskId, newEnd } = queue.shift()!;
+          if (visited.has(taskId)) continue;
+          visited.add(taskId);
+          for (const dep of currentDeps.filter(dep => dep.predecessor_id === taskId)) {
+            const succ = taskMap.get(dep.task_id);
+            if (!succ) continue;
+            const minStartDate = new Date(newEnd);
+            minStartDate.setDate(minStartDate.getDate() + dep.lag_days + 1);
+            const minStart = minStartDate.toISOString().slice(0, 10);
+            const succStart = succ.start_date ?? "";
+            if (!succStart || succStart <= minStart) {
+              const origSuccStart = new Date(succStart || succ.due_date || minStart);
+              const origSuccEnd   = new Date(succ.due_date || succStart || minStart);
+              const duration      = Math.max(0, Math.round((origSuccEnd.getTime() - origSuccStart.getTime()) / 86400000));
+              const newSuccEndDate = new Date(minStart);
+              newSuccEndDate.setDate(newSuccEndDate.getDate() + duration);
+              const newSuccEnd = newSuccEndDate.toISOString().slice(0, 10);
+              taskMap.set(dep.task_id, { ...succ, start_date: minStart, due_date: newSuccEnd });
+              await updateSilent.mutateAsync({
+                id: succ.id, project_id: succ.project_id,
+                start_date: minStart, due_date: newSuccEnd,
+              } as Partial<Task> & { id: string; project_id: string });
+              queue.push({ taskId: dep.task_id, newEnd: newSuccEnd });
+            }
+          }
+        }
+      } catch (_e) { /* géré par onError des mutations */ }
+      committingRef.current = false;
+    }
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup",  onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup",  onUp);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const VISIBLE_DAYS = 60;
 
@@ -419,9 +541,22 @@ function GanttContent() {
                     <div style={{ position: "absolute", left: todayX, top: 0, bottom: 0, width: 2, background: "#818cf8", zIndex: 5 }} />
                   )}
 
+                  {/* Curseur global pendant le redimensionnement */}
+                  {drag && <style>{`body { cursor: ew-resize !important; user-select: none !important; }`}</style>}
+
                   {/* Task rows */}
                   {tasks.map(task => {
-                    const bar = getBar(task);
+                    const isDragging = drag?.taskId === task.id;
+                    const effStart = isDragging ? drag.previewStart : (task.start_date ?? "");
+                    const effEnd   = isDragging ? drag.previewEnd   : (task.due_date   ?? "");
+                    const s = effStart ? new Date(effStart) : null;
+                    const e = effEnd   ? new Date(effEnd)   : null;
+                    const barStart = s ?? e;
+                    const barEnd   = e ?? s;
+                    const bar = barStart && barEnd ? {
+                      x: diffDays(viewStart, barStart) * DAY_W,
+                      w: Math.max(DAY_W, (diffDays(barStart, barEnd) + 1) * DAY_W),
+                    } : null;
                     return (
                       <div key={task.id} style={{ height: ROW_H, position: "relative" }} className="border-b border-slate-800/30 flex items-center">
                         {/* Weekend shading */}
@@ -430,12 +565,24 @@ function GanttContent() {
                         ) : null)}
                         {bar && (
                           <div
-                            style={{ position: "absolute", left: bar.x, width: bar.w, height: 24, borderRadius: 4, zIndex: 2, cursor: "pointer" }}
-                            className={`${METH_COLORS[task.methodology_recommendation ?? ""] ?? "bg-slate-600"} opacity-80 hover:opacity-100 transition-opacity flex items-center px-2`}
-                            onClick={() => setEditTask(task)}
-                            title={task.title}
+                            style={{ position: "absolute", left: bar.x, width: bar.w, height: 24, borderRadius: 4, zIndex: 2, cursor: "grab" }}
+                            className={`${METH_COLORS[task.methodology_recommendation ?? ""] ?? "bg-slate-600"} ${isDragging ? "opacity-100 ring-2 ring-white/40" : "opacity-80 hover:opacity-100"} transition-opacity flex items-center relative`}
+                            onClick={() => { if (justDraggedRef.current) { justDraggedRef.current = false; return; } setEditTask(task); }}
+                            title={`${task.title}${isDragging ? ` · ${effStart} → ${effEnd}` : ""}`}
                           >
-                            <span className="text-white text-[10px] truncate font-medium">{task.title}</span>
+                            {/* Poignée gauche (redimensionnement) */}
+                            <div
+                              style={{ position: "absolute", left: 0, top: 0, width: 8, height: "100%", cursor: "ew-resize", zIndex: 3, borderRadius: "4px 0 0 4px" }}
+                              className="hover:bg-white/25 transition-colors"
+                              onMouseDown={(ev) => { ev.stopPropagation(); ev.preventDefault(); startResize(task, "left", ev.clientX); }}
+                            />
+                            <span className="text-white text-[10px] truncate font-medium px-3 pointer-events-none flex-1">{task.title}</span>
+                            {/* Poignée droite (redimensionnement) */}
+                            <div
+                              style={{ position: "absolute", right: 0, top: 0, width: 8, height: "100%", cursor: "ew-resize", zIndex: 3, borderRadius: "0 4px 4px 0" }}
+                              className="hover:bg-white/25 transition-colors"
+                              onMouseDown={(ev) => { ev.stopPropagation(); ev.preventDefault(); startResize(task, "right", ev.clientX); }}
+                            />
                           </div>
                         )}
                       </div>
@@ -456,14 +603,23 @@ function GanttContent() {
                     );
                   })}
 
-                  {/* SVG dependency arrows */}
+                  {/* SVG dependency arrows (utilise les positions preview si drag actif) */}
                   <svg style={{ position: "absolute", top: 0, left: 0, width: VISIBLE_DAYS * DAY_W, height: (tasks.length + milestones.length) * ROW_H, pointerEvents: "none", zIndex: 4 }}>
                     {deps.map(dep => {
                       const predTask = tasks.find(t => t.id === dep.predecessor_id);
                       const succTask = tasks.find(t => t.id === dep.task_id);
                       if (!predTask || !succTask) return null;
-                      const predBar = getBar(predTask);
-                      const succBar = getBar(succTask);
+                      // Utiliser la position de preview si la tâche est en cours de resize
+                      const getEffBar = (t: Task) => {
+                        const isDrag = drag?.taskId === t.id;
+                        const es = isDrag ? (drag.previewStart ? new Date(drag.previewStart) : null) : (t.start_date ? new Date(t.start_date) : null);
+                        const ee = isDrag ? (drag.previewEnd   ? new Date(drag.previewEnd)   : null) : (t.due_date   ? new Date(t.due_date)   : null);
+                        if (!es && !ee) return null;
+                        const s2 = es ?? ee!; const e2 = ee ?? es!;
+                        return { x: diffDays(viewStart, s2) * DAY_W, w: Math.max(DAY_W, (diffDays(s2, e2) + 1) * DAY_W) };
+                      };
+                      const predBar = getEffBar(predTask);
+                      const succBar = getEffBar(succTask);
                       if (!predBar || !succBar) return null;
                       const predRow = taskRowMap[dep.predecessor_id];
                       const succRow = taskRowMap[dep.task_id];

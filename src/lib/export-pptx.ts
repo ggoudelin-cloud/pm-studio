@@ -52,8 +52,8 @@ export async function exportProjectToPptx(data: ExportData) {
   const pptx = new PptxGenJS();
 
   pptx.layout    = "LAYOUT_WIDE";
-  pptx.author    = "PM Studio — MG Softwares";
-  pptx.company   = "MG Softwares";
+  pptx.author    = "PM Studio — Consort France";
+  pptx.company   = "Consort France";
   pptx.subject   = `Rapport ${data.project.name}`;
   pptx.title     = data.project.name;
 
@@ -95,7 +95,7 @@ export async function exportProjectToPptx(data: ExportData) {
   cover.addText(`Rapport généré le ${new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })}`, {
     x: 0.6, y: 5.5, w: 10, h: 0.4, fontSize: 11, color: C.white,
   });
-  cover.addText("Document confidentiel — MG Softwares", {
+  cover.addText("Document confidentiel — Consort France", {
     x: 0.6, y: 5.9, w: 10, h: 0.3, fontSize: 10, color: "C7D2FE", italic: true,
   });
 
@@ -325,7 +325,7 @@ export async function exportProjectToPptx(data: ExportData) {
   last.addShape(pptx.ShapeType.rect, { x: 0, y: 2.8, w: W, h: 2, fill: { color: C.indigo }, line: { color: C.indigo } });
   last.addText("PM Studio", { x: 0.6, y: 1.2, w: 12, h: 0.6, fontSize: 14, color: "A5B4FC", align: "center" });
   last.addText("Merci pour votre attention", { x: 0.6, y: 3.0, w: 12, h: 0.8, fontSize: 28, color: C.white, bold: true, align: "center" });
-  last.addText("by MG Softwares", { x: 0.6, y: 3.9, w: 12, h: 0.4, fontSize: 12, color: "C7D2FE", align: "center", italic: true });
+  last.addText("by Consort France", { x: 0.6, y: 3.9, w: 12, h: 0.4, fontSize: 12, color: "C7D2FE", align: "center", italic: true });
 
   const fileName = `${data.project.name.replace(/[^a-zA-Z0-9\s]/g, "").trim()}_rapport_${new Date().toISOString().slice(0, 10)}.pptx`;
   await pptx.writeFile({ fileName });

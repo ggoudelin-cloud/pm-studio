@@ -78,9 +78,30 @@ export interface Task {
   estimated_hours: number | null;
   actual_hours: number | null;
   due_date: string | null;
+  allocation_pct: number;
   created_at: string;
   updated_at: string;
   profiles?: Profile;
+}
+
+export type RiskCategory = "technical" | "schedule" | "budget" | "resource" | "quality" | "other";
+export type RiskStatus   = "open" | "mitigated" | "closed" | "occurred";
+
+export interface ProjectRisk {
+  id: string;
+  project_id: string;
+  title: string;
+  description: string | null;
+  category: RiskCategory;
+  probability: number;
+  impact: number;
+  weight: number;
+  status: RiskStatus;
+  mitigation: string | null;
+  owner_id: string | null;
+  due_date: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Epic {

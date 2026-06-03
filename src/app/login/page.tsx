@@ -62,7 +62,7 @@ export default function LoginPage() {
             <Layers className="w-6 h-6 text-white" />
           </div>
           <h1 className="text-xl font-bold text-white">PM Studio</h1>
-          <p className="text-slate-400 text-sm mt-1">by MG Softwares</p>
+          <p className="text-slate-400 text-sm mt-1">by Consort France</p>
         </div>
 
         {/* Carte */}

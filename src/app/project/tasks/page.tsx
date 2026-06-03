@@ -4,6 +4,7 @@ import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useTasks, useCreateTask, useUpdateTask, useDeleteTask, useTaskDependencies, useProjectMembers } from "@/hooks/useProjects";
+import { useMemo } from "react";
 import { Trash2, CalendarDays, User, Link2 } from "lucide-react";
 import Comments from "@/components/Comments";
 import DashboardLayout from "@/components/layout/DashboardLayout";
@@ -77,9 +78,10 @@ function RecommendationBadge({ task }: { task: Partial<Task> }) {
   );
 }
 
-function TaskModal({ projectId, task, onClose }: {
+function TaskModal({ projectId, task, allTasks, onClose }: {
   projectId: string;
   task?: Task;
+  allTasks: Task[];
   onClose: () => void;
 }) {
   const createTask = useCreateTask();
@@ -92,6 +94,7 @@ function TaskModal({ projectId, task, onClose }: {
   const [assigneeId, setAssignee] = useState(task?.assignee_id ?? "");
   const [startDate,  setStart]    = useState(task?.start_date ?? "");
   const [dueDate,    setDue]      = useState(task?.due_date ?? "");
+  const [allocPct,   setAllocPct] = useState(task?.allocation_pct ?? 100);
   const [scores, setScores]           = useState({
     score_stability:         task?.score_stability ?? 3,
     score_complexity:        task?.score_complexity ?? 3,
@@ -121,6 +124,24 @@ function TaskModal({ projectId, task, onClose }: {
     computePreview(next);
   }
 
+  // Détection de conflits de ressource
+  const resourceConflict = useMemo(() => {
+    if (!assigneeId || (!startDate && !dueDate)) return null;
+    const effStart = startDate || dueDate;
+    const effEnd   = dueDate   || startDate;
+    const overlapping = allTasks.filter(t => {
+      if (t.id === task?.id) return false;
+      if (t.assignee_id !== assigneeId) return false;
+      const tS = t.start_date || t.due_date;
+      const tE = t.due_date   || t.start_date;
+      if (!tS || !tE) return false;
+      return effStart! <= tE && effEnd! >= tS;
+    });
+    const totalPct = overlapping.reduce((s, t) => s + (t.allocation_pct ?? 100), 0) + allocPct;
+    if (totalPct > 100) return { totalPct, tasks: overlapping };
+    return null;
+  }, [assigneeId, startDate, dueDate, allocPct, allTasks, task?.id]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const payload = {
@@ -131,6 +152,7 @@ function TaskModal({ projectId, task, onClose }: {
       start_date:   startDate   || null,
       due_date:     dueDate     || null,
       methodology:  (methodology as Methodology) || null,
+      allocation_pct: allocPct,
       ...scores,
     };
     if (isEdit) {
@@ -161,19 +183,39 @@ function TaskModal({ projectId, task, onClose }: {
                 placeholder="Détails de la tâche…" />
             </div>
 
-            {/* Assigné */}
+            {/* Assigné + % d'occupation */}
             {members.length > 0 && (
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-slate-300">Personne en charge</label>
-                <select value={assigneeId} onChange={e => setAssignee(e.target.value)}
-                  className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                  <option value="">— Non assigné —</option>
-                  {members.map(m => (
-                    <option key={m.user_id} value={m.user_id}>
-                      {m.profiles?.full_name ?? m.profiles?.email ?? m.user_id}
-                    </option>
-                  ))}
-                </select>
+              <div className="space-y-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-slate-300">Personne en charge</label>
+                  <select value={assigneeId} onChange={e => setAssignee(e.target.value)}
+                    className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="">— Non assigné —</option>
+                    {members.map(m => (
+                      <option key={m.user_id} value={m.user_id}>
+                        {m.profiles?.full_name ?? m.profiles?.email ?? m.user_id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {assigneeId && (
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex justify-between text-sm">
+                      <label className="font-medium text-slate-300">Taux d&apos;occupation</label>
+                      <span className="text-indigo-400 font-medium">{allocPct} %</span>
+                    </div>
+                    <input type="range" min={10} max={100} step={10} value={allocPct}
+                      onChange={e => setAllocPct(parseInt(e.target.value))}
+                      className="w-full h-1.5 bg-slate-700 rounded-full appearance-none cursor-pointer accent-indigo-500" />
+                    <div className="flex justify-between text-xs text-slate-600"><span>10 %</span><span>100 %</span></div>
+                  </div>
+                )}
+                {resourceConflict && (
+                  <div className="bg-amber-950/30 border border-amber-700/50 rounded-lg px-3 py-2 text-xs text-amber-300 space-y-1">
+                    <p className="font-medium">⚠ Surcharge ressource : {resourceConflict.totalPct} % sur la période</p>
+                    <p className="text-amber-400/70">Tâches en conflit : {resourceConflict.tasks.map(t => t.title).join(", ")}</p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -408,7 +450,7 @@ function TasksPageContent() {
       </div>
 
       {showModal && id && (
-        <TaskModal projectId={id} task={editTask} onClose={() => { setShowModal(false); setEditTask(undefined); }} />
+        <TaskModal projectId={id} task={editTask} allTasks={tasks ?? []} onClose={() => { setShowModal(false); setEditTask(undefined); }} />
       )}
 
       {/* Confirmation suppression tâche */}
