@@ -509,7 +509,13 @@ function GanttContent() {
             </div>
 
             {/* Right panel: timeline */}
-            <div className="flex-1 overflow-auto" ref={timelineRef}>
+            <div className="flex-1 overflow-auto" ref={timelineRef}
+              onWheel={e => {
+                if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return; // déjà horizontal
+                e.preventDefault();
+                timelineRef.current!.scrollLeft += e.deltaY;
+              }}
+            >
               <div style={{ width: VISIBLE_DAYS * DAY_W, position: "relative" }}>
                 {/* Month header */}
                 <div style={{ height: ROW_H, display: "flex" }} className="border-b border-slate-700 bg-slate-900 sticky top-0 z-10">
