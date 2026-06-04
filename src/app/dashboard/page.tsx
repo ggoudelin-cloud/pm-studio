@@ -180,7 +180,7 @@ function UoGauge({ projects }: { projects: Project[] }) {
 }
 
 // ── Vue PMO portefeuille ──────────────────────────────────────────────────────
-function PMDashboard({ projects, isLoading }: { projects: Project[] | undefined; isLoading: boolean }) {
+function PMDashboard({ projects, isLoading, isPMO = true }: { projects: Project[] | undefined; isLoading: boolean; isPMO?: boolean }) {
   const activeProjects   = projects?.filter(p => p.status === "active") ?? [];
   const draftProjects    = projects?.filter(p => p.status === "draft") ?? [];
   const criticalProjects = projects?.filter(p => p.complexity_level === "critical") ?? [];
@@ -242,11 +242,11 @@ function PMDashboard({ projects, isLoading }: { projects: Project[] | undefined;
         </Card>
       </div>
 
-      {/* Jauge UO */}
-      {projects && projects.length > 0 && <UoGauge projects={projects} />}
+      {/* Jauge UO — PM/PMO uniquement */}
+      {isPMO && projects && projects.length > 0 && <UoGauge projects={projects} />}
 
-      {/* Répartition par complexité */}
-      {projects && projects.some(p => p.complexity_level) && (
+      {/* Répartition par complexité — PM/PMO uniquement */}
+      {isPMO && projects && projects.some(p => p.complexity_level) && (
         <Card>
           <CardHeader>
             <h2 className="font-semibold text-white text-sm">Répartition par niveau de complexité</h2>
@@ -423,6 +423,7 @@ export default function DashboardPage() {
               return pmProjects.length > 0 ? pmProjects : projects;
             })()}
             isLoading={isLoading}
+            isPMO={!isDevOnly}
           />
         )}
 
