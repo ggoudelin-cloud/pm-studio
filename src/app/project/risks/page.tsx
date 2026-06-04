@@ -3,7 +3,7 @@
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useProjectRisks, useCreateRisk, useUpdateRisk, useDeleteRisk, useProjectMembers } from "@/hooks/useProjects";
+import { useProjectRisks, useCreateRisk, useUpdateRisk, useDeleteRisk, useProjectMembers, useMyRoleInProject } from "@/hooks/useProjects";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -187,8 +187,10 @@ function RisksContent() {
   const id = searchParams.get("id");
   const { data: risks = [], isLoading } = useProjectRisks(id);
   const { data: members = [] } = useProjectMembers(id);
+  const { data: myRole } = useMyRoleInProject(id);
   const deleteRisk = useDeleteRisk();
   const updateRisk = useUpdateRisk();
+  const isReadOnly = myRole === "client" || myRole === "observer";
 
   const [showModal, setShowModal] = useState(false);
   const [editRisk,  setEditRisk]  = useState<(typeof risks)[0] | undefined>();
@@ -217,9 +219,11 @@ function RisksContent() {
             </h1>
             <p className="text-slate-400 text-sm mt-1">{risks.length} risque(s)</p>
           </div>
-          <Button onClick={() => { setEditRisk(undefined); setShowModal(true); }}>
-            <Plus className="w-4 h-4" /> Nouveau risque
-          </Button>
+          {!isReadOnly && (
+            <Button onClick={() => { setEditRisk(undefined); setShowModal(true); }}>
+              <Plus className="w-4 h-4" /> Nouveau risque
+            </Button>
+          )}
         </div>
 
         {/* Synthèse niveaux */}
@@ -300,14 +304,18 @@ function RisksContent() {
                         >
                           {STATUSES.map(s => <option key={s.value} value={s.value} className="bg-slate-900 text-slate-200">{s.label}</option>)}
                         </select>
-                        <button onClick={() => { setEditRisk(risk); setShowModal(true); }}
-                          className="text-slate-500 hover:text-slate-300 transition-colors" title="Modifier">
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => setConfirmDel(risk)}
-                          className="text-slate-600 hover:text-red-400 transition-colors" title="Supprimer">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {!isReadOnly && (
+                          <>
+                            <button onClick={() => { setEditRisk(risk); setShowModal(true); }}
+                              className="text-slate-500 hover:text-slate-300 transition-colors" title="Modifier">
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => setConfirmDel(risk)}
+                              className="text-slate-600 hover:text-red-400 transition-colors" title="Supprimer">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </CardBody>

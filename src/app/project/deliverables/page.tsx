@@ -3,7 +3,7 @@
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useDeliverables, useCreateDeliverable, useUpdateDeliverable, usePhases } from "@/hooks/useProjects";
+import { useDeliverables, useCreateDeliverable, useUpdateDeliverable, usePhases, useMyRoleInProject } from "@/hooks/useProjects";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -97,6 +97,8 @@ function DeliverablesContent() {
   const id = searchParams.get("id");
   const { data: deliverables = [], isLoading } = useDeliverables(id);
   const { data: phases = [] } = usePhases(id);
+  const { data: myRole } = useMyRoleInProject(id);
+  const isReadOnly = myRole === "client" || myRole === "observer";
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem]   = useState<Deliverable | undefined>();
 
@@ -117,9 +119,11 @@ function DeliverablesContent() {
             </h1>
             <p className="text-slate-400 text-sm mt-1">{approved}/{total} approuvé(s)</p>
           </div>
-          <Button onClick={() => { setEditItem(undefined); setShowModal(true); }}>
-            <Plus className="w-4 h-4" /> Nouveau livrable
-          </Button>
+          {!isReadOnly && (
+            <Button onClick={() => { setEditItem(undefined); setShowModal(true); }}>
+              <Plus className="w-4 h-4" /> Nouveau livrable
+            </Button>
+          )}
         </div>
 
         {/* Colonnes par statut */}
@@ -146,7 +150,7 @@ function DeliverablesContent() {
                     {items.map(d => {
                       const phase = phases.find(p => p.id === d.phase_id);
                       return (
-                        <div key={d.id} className="cursor-pointer" onClick={() => { setEditItem(d); setShowModal(true); }}>
+                        <div key={d.id} className={isReadOnly ? "" : "cursor-pointer"} onClick={() => { if (!isReadOnly) { setEditItem(d); setShowModal(true); } }}>
                     <Card className="hover:border-slate-700 transition-colors">
                           <CardBody className="py-3">
                             <p className="text-sm font-medium text-slate-200 leading-snug">{d.title}</p>

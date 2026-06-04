@@ -79,9 +79,9 @@ export default function Sidebar() {
     setLoggingOut(true);
     try {
       await supabase.auth.signOut();
-      qc.clear();
-      reset();
-      router.replace("/login/");
+      // onAuthStateChange(SIGNED_OUT) se charge de reset() + qc.clear()
+      // On force la navigation immédiatement sans attendre
+      window.location.replace("/login/");
     } catch {
       toast.error("Erreur lors de la déconnexion");
       setLoggingOut(false);

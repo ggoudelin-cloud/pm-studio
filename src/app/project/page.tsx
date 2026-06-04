@@ -246,15 +246,16 @@ function ProjectPageContent() {
   const { data: sprints }   = useSprints(id);
   const { data: phases }    = usePhases(id);
   const { data: milestones } = useMilestones(id);
-  const { data: myRole }    = useMyRoleInProject(id);
+  const { data: myRole, isLoading: roleLoading } = useMyRoleInProject(id);
   const [showEdit,   setShowEdit]   = useState(false);
   const [exporting,  setExporting]  = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const qcProject = useQueryClient();
 
-  const isClient   = myRole === "client" || myRole === "observer";
-  const isDev      = myRole === "dev";
-  const isPM       = myRole === "pm" || myRole === "pmo" || myRole === null;
+  // Attendre que le rôle soit chargé avant de décider du niveau d'accès
+  const isClient   = !roleLoading && (myRole === "client" || myRole === "observer");
+  const isDev      = !roleLoading && myRole === "dev";
+  const isPM       = roleLoading ? false : (myRole === "pm" || myRole === "pmo" || myRole === null);
 
   async function handleExport() {
     if (!project) return;
@@ -392,7 +393,7 @@ function ProjectPageContent() {
               </Card>
             )}
 
-            {/* Modules */}
+            {/* Modules — on attend que le rôle soit résolu */}
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-semibold text-white">
@@ -402,7 +403,13 @@ function ProjectPageContent() {
                   <span className="text-xs text-slate-500 bg-slate-800 px-2 py-1 rounded-md">Vue client — lecture</span>
                 )}
               </div>
-              <ProjectNav id={project.id} role={myRole ?? null} />
+              {roleLoading ? (
+                <div className="py-8 flex justify-center">
+                  <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : (
+                <ProjectNav id={project.id} role={myRole ?? null} />
+              )}
             </div>
           </>
         )}

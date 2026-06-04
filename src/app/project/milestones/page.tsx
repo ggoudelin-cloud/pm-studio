@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   useMilestones, useCreateMilestone, useUpdateMilestone, useDeleteMilestone,
   usePhases, useTasks, useMilestoneTasks, useAddMilestoneTask, useRemoveMilestoneTask,
+  useMyRoleInProject,
 } from "@/hooks/useProjects";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardBody } from "@/components/ui/Card";
@@ -195,11 +196,12 @@ function MilestoneModal({ projectId, milestone, phases, onClose }: {
 
 // ── Carte jalon avec tâches rattachées ────────────────────────────────────────
 function MilestoneCard({
-  m, phases, allTasks, onEdit, onDelete, onLink,
+  m, phases, allTasks, myRole, onEdit, onDelete, onLink,
 }: {
   m: MilestoneType;
   phases: { id: string; name: string }[];
   allTasks: Task[];
+  myRole: string | null | undefined;
   onEdit: () => void;
   onDelete: () => void;
   onLink: () => void;
@@ -258,21 +260,23 @@ function MilestoneCard({
               </div>
             )}
           </div>
-          <div className="flex gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={onLink}
-              className="text-slate-500 hover:text-indigo-400 transition-colors p-1.5 rounded-lg hover:bg-slate-800"
-              title="Rattacher des tâches">
-              <Link2 className="w-3.5 h-3.5" />
-            </button>
-            <button onClick={onEdit}
-              className="text-slate-500 hover:text-indigo-400 transition-colors p-1.5 rounded-lg hover:bg-slate-800">
-              <Edit2 className="w-3.5 h-3.5" />
-            </button>
-            <button onClick={onDelete}
-              className="text-slate-500 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-slate-800">
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          {!(myRole === "client" || myRole === "observer") && (
+            <div className="flex gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={onLink}
+                className="text-slate-500 hover:text-indigo-400 transition-colors p-1.5 rounded-lg hover:bg-slate-800"
+                title="Rattacher des tâches">
+                <Link2 className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={onEdit}
+                className="text-slate-500 hover:text-indigo-400 transition-colors p-1.5 rounded-lg hover:bg-slate-800">
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+              <button onClick={onDelete}
+                className="text-slate-500 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-slate-800">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
       </CardBody>
     </Card>
@@ -285,7 +289,9 @@ function MilestonesContent() {
   const { data: milestones = [], isLoading } = useMilestones(id);
   const { data: phases = [] }                = usePhases(id);
   const { data: allTasks = [] }              = useTasks(id);
+  const { data: myRole }                     = useMyRoleInProject(id);
   const deleteMilestone = useDeleteMilestone();
+  const isReadOnly = myRole === "client" || myRole === "observer";
 
   const [showModal,    setShowModal]    = useState(false);
   const [editItem,     setEditItem]     = useState<MilestoneType | undefined>();
@@ -317,9 +323,11 @@ function MilestonesContent() {
               {achieved} atteint{achieved > 1 ? "s" : ""} · {pending} en attente · {missed > 0 ? `${missed} manqué${missed > 1 ? "s" : ""}` : "0 manqué"}
             </p>
           </div>
-          <Button onClick={() => { setEditItem(undefined); setShowModal(true); }}>
-            <Plus className="w-4 h-4" /> Nouveau jalon
-          </Button>
+          {!isReadOnly && (
+            <Button onClick={() => { setEditItem(undefined); setShowModal(true); }}>
+              <Plus className="w-4 h-4" /> Nouveau jalon
+            </Button>
+          )}
         </div>
 
         {milestones.length > 0 && (
@@ -354,9 +362,10 @@ function MilestonesContent() {
                 m={m}
                 phases={phases}
                 allTasks={allTasks}
-                onEdit={() => { setEditItem(m); setShowModal(true); }}
-                onDelete={() => setConfirmDel(m)}
-                onLink={() => setLinkItem(m)}
+                myRole={myRole}
+                onEdit={() => { if (!isReadOnly) { setEditItem(m); setShowModal(true); } }}
+                onDelete={() => { if (!isReadOnly) setConfirmDel(m); }}
+                onLink={() => { if (!isReadOnly) setLinkItem(m); }}
               />
             ))}
           </div>

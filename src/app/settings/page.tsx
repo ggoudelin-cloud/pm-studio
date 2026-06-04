@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAuthStore } from "@/stores/auth";
+import { useMyMemberships } from "@/hooks/useProjects";
 import { supabase } from "@/lib/supabase";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
@@ -12,6 +13,10 @@ import toast from "react-hot-toast";
 
 export default function SettingsPage() {
   const { user, profile, setProfile } = useAuthStore();
+  const { data: memberships = [] } = useMyMemberships();
+  // Client = uniquement des rôles client/observer sur tous ses projets
+  const isClientOnly = memberships.length > 0 &&
+    memberships.every(m => m.role === "client" || m.role === "observer");
 
   const [fullName,     setFullName]     = useState(profile?.full_name ?? "");
   const [jobTitle,     setJobTitle]     = useState(profile?.job_title ?? "");
@@ -99,34 +104,36 @@ export default function SettingsPage() {
                   placeholder="Nom de votre entreprise ou organisation"
                 />
               </div>
-              {/* Tarification */}
-              <div className="pt-2 border-t border-slate-800">
-                <div className="flex items-center gap-2 mb-3 mt-3">
-                  <Euro className="w-4 h-4 text-indigo-400" />
-                  <span className="text-sm font-medium text-slate-300">Tarif journalier</span>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1.5">Taux HT (€/jour)</label>
-                    <input
-                      type="number" min="0" step="0.01" value={rateHT}
-                      onChange={(e) => handleRateHT(e.target.value)}
-                      placeholder="ex : 500"
-                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
+              {/* Tarification — masquée pour les clients */}
+              {!isClientOnly && (
+                <div className="pt-2 border-t border-slate-800">
+                  <div className="flex items-center gap-2 mb-3 mt-3">
+                    <Euro className="w-4 h-4 text-indigo-400" />
+                    <span className="text-sm font-medium text-slate-300">Tarif journalier</span>
                   </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1.5">Taux TTC (€/jour)</label>
-                    <input
-                      type="number" min="0" step="0.01" value={rateTTC}
-                      onChange={(e) => setRateTTC(e.target.value)}
-                      placeholder="ex : 600 (TVA 20% auto)"
-                      className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                    <p className="text-xs text-slate-600 mt-1">Calculé auto (HT × 1.20)</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1.5">Taux HT (€/jour)</label>
+                      <input
+                        type="number" min="0" step="0.01" value={rateHT}
+                        onChange={(e) => handleRateHT(e.target.value)}
+                        placeholder="ex : 500"
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1.5">Taux TTC (€/jour)</label>
+                      <input
+                        type="number" min="0" step="0.01" value={rateTTC}
+                        onChange={(e) => setRateTTC(e.target.value)}
+                        placeholder="ex : 600 (TVA 20% auto)"
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <p className="text-xs text-slate-600 mt-1">Calculé auto (HT × 1.20)</p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               <div className="pt-2">
                 <Button type="submit" disabled={saving}>
