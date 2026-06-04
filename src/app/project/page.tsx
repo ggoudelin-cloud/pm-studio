@@ -49,11 +49,7 @@ function getNavLinks(id: string, role: MemberRole | null) {
 
   if (isDev) {
     return [
-      { href: `/project/my-tasks/?id=${id}`,    label: "Mes tâches",        icon: CheckSquare,  desc: "Vos tâches assignées — mettez à jour votre avancement" },
-      { href: `/project/tasks/?id=${id}`,        label: "Toutes les tâches", icon: ListTodo,     desc: "Toutes les tâches du projet" },
-      { href: `/project/gantt/?id=${id}`,        label: "Gantt",             icon: CalendarDays, desc: "Planning et dépendances" },
-      { href: `/project/milestones/?id=${id}`,   label: "Jalons",            icon: Milestone,    desc: "Jalons rattachés à vos tâches" },
-      { href: `/project/reporting/?id=${id}`,    label: "Reporting",         icon: BarChart2,    desc: "Avancement global du projet" },
+      { href: `/project/my-tasks/?id=${id}`, label: "Mes tâches", icon: CheckSquare, desc: "Vos tâches assignées — mettez à jour votre avancement" },
     ];
   }
 

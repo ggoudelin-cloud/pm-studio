@@ -294,12 +294,28 @@ function GanttContent() {
   const [editTask,   setEditTask]   = useState<Task | null>(null);
   const [depTask,    setDepTask]    = useState<Task | null>(null);
   const timelineRef    = useRef<HTMLDivElement>(null);
+  const leftPanelRef   = useRef<HTMLDivElement>(null);
+  const syncingScroll  = useRef(false);
   const dragRef        = useRef<DragState | null>(null);
   const tasksRef       = useRef(tasks);
   tasksRef.current     = tasks;
   const depsRef        = useRef(deps);
   depsRef.current      = deps;
   const justDraggedRef = useRef(false);
+
+  // Synchronisation scroll vertical gauche ↔ droite
+  function syncLeft() {
+    if (syncingScroll.current || !leftPanelRef.current || !timelineRef.current) return;
+    syncingScroll.current = true;
+    timelineRef.current.scrollTop = leftPanelRef.current.scrollTop;
+    syncingScroll.current = false;
+  }
+  function syncRight() {
+    if (syncingScroll.current || !leftPanelRef.current || !timelineRef.current) return;
+    syncingScroll.current = true;
+    leftPanelRef.current.scrollTop = timelineRef.current.scrollTop;
+    syncingScroll.current = false;
+  }
   const committingRef  = useRef(false);
 
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -472,7 +488,7 @@ function GanttContent() {
         ) : (
           <div className="flex flex-1 overflow-hidden">
             {/* Left panel */}
-            <div className="shrink-0 bg-slate-950 border-r border-slate-800 overflow-y-auto" style={{ width: LEFT_W }}>
+            <div ref={leftPanelRef} onScroll={syncLeft} className="shrink-0 bg-slate-950 border-r border-slate-800 overflow-y-auto" style={{ width: LEFT_W }}>
               {/* Header spacer */}
               <div style={{ height: ROW_H * 2 }} className="border-b border-slate-800 flex items-end px-3 pb-2">
                 <span className="text-xs text-slate-500 font-medium">TÂCHE</span>
@@ -510,8 +526,9 @@ function GanttContent() {
 
             {/* Right panel: timeline */}
             <div className="flex-1 overflow-auto" ref={timelineRef}
+              onScroll={syncRight}
               onWheel={e => {
-                if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return; // déjà horizontal
+                if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
                 e.preventDefault();
                 timelineRef.current!.scrollLeft += e.deltaY;
               }}

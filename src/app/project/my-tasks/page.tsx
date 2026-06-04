@@ -8,7 +8,7 @@ import { useAuthStore } from "@/stores/auth";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { CheckSquare, Clock, AlertTriangle, CheckCircle2, Ban, Loader2, CalendarDays, TrendingUp } from "lucide-react";
+import { CheckSquare, Clock, AlertTriangle, CheckCircle2, Ban, CalendarDays, TrendingUp, Loader2 } from "lucide-react";
 import type { Task, TaskStatus } from "@/types";
 import toast from "react-hot-toast";
 
@@ -54,8 +54,8 @@ function ProgressSlider({ task, projectId }: { task: Task; projectId: string }) 
     <div className="space-y-2">
       <div className="flex items-center justify-between text-xs">
         <span className="text-slate-400">Avancement</span>
-        <span className={`font-semibold ${value === 100 ? "text-green-400" : "text-slate-200"}`}>
-          {saving ? <Loader2 className="w-3 h-3 animate-spin inline" /> : `${value} %`}
+        <span className={`font-semibold transition-colors ${saving ? "text-indigo-400" : value === 100 ? "text-green-400" : "text-slate-200"}`}>
+          {value} %{saving ? " …" : ""}
         </span>
       </div>
       <input
