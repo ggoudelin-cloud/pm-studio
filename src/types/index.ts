@@ -36,6 +36,7 @@ export interface Project {
   end_date: string | null;
   complexity_level: ComplexityLevel | null;
   uo_value: number | null;
+  uo_unit_cost: number | null;
   context_team_size: number | null;
   context_domain_maturity: number | null;
   context_client_proximity: number | null;

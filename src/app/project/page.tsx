@@ -20,7 +20,7 @@ import {
   KanbanSquare, GitBranch, ListTodo, ArrowRight, CalendarDays,
   Banknote, Users, Download, X, Edit2, Package, RefreshCw, GitMerge, Trash2,
   DollarSign, Milestone, AlertTriangle, BarChart2, Rocket, Building2,
-  FileText, ClipboardList, Wrench, Star, CheckSquare,
+  FileText, Wrench, Star, CheckSquare,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import type { Project, MemberRole, ComplexityLevel } from "@/types";
@@ -67,6 +67,7 @@ function getNavLinks(id: string, role: MemberRole | null) {
     { href: `/project/flash-report/?id=${id}`,    label: "Rapport Flash",          icon: FileText,      desc: "Rapport hebdomadaire avec check-lists RSSI/DA/tests",    group: "PMO" },
     { href: `/project/committees/?id=${id}`,      label: "Comitologie",            icon: Building2,     desc: "COPIL, ComEV, CAB — ordres du jour et comptes rendus",   group: "PMO" },
     { href: `/project/skills/?id=${id}`,          label: "Matrice de compétences", icon: Star,          desc: "Compétences des membres avec niveaux requis",            group: "PMO" },
+    { href: `/project/uo/?id=${id}`,              label: "Suivi UO & Coûts UO",    icon: Wrench,        desc: "UO allouées, coût/UO, consommation mensuelle et budget", group: "Finances" },
     { href: `/project/costs/?id=${id}`,           label: "Gestion des coûts",      icon: DollarSign,    desc: "Ressources humaines, logiciels, infrastructure",         group: "Finances" },
     { href: `/project/risks/?id=${id}`,           label: "Registre des risques",   icon: AlertTriangle, desc: "Identifiez, pondérez et suivez les risques",             group: "Finances" },
     { href: `/project/reporting/?id=${id}`,       label: "Reporting",              icon: BarChart2,     desc: "Avancement, budget dépensé, charge ressources, risques", group: "Reporting" },

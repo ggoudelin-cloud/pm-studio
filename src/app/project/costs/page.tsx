@@ -5,12 +5,12 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   useProjectCosts, useCreateCost, useUpdateCost, useDeleteCost,
-  useProjectMembers,
+  useProjectMembers, useProject, useUoLogs,
 } from "@/hooks/useProjects";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { DollarSign, Plus, X, Users, Monitor, Server, Tag, Trash2, Edit2, TrendingUp } from "lucide-react";
+import { DollarSign, Plus, X, Users, Monitor, Server, Tag, Trash2, Edit2, TrendingUp, Wrench } from "lucide-react";
 import type { ProjectCost, CostCategory } from "@/types";
 
 // ── Config catégories ────────────────────────────────────────────────────────
@@ -209,7 +209,15 @@ function CostsContent() {
   const id = searchParams.get("id");
   const { data: costs = [],   isLoading } = useProjectCosts(id);
   const { data: members = [] }            = useProjectMembers(id);
+  const { data: project }                 = useProject(id);
+  const { data: uoLogs = [] }             = useUoLogs(id);
   const deleteCost = useDeleteCost();
+
+  const currentYear   = new Date().getFullYear();
+  const uoConsumed    = uoLogs.filter(l => l.year === currentYear).reduce((s, l) => s + l.uo_consumed, 0);
+  const uoUnitCost    = project?.uo_unit_cost ?? 0;
+  const uoCostTotal   = uoConsumed * uoUnitCost;
+  const uoBudget      = (project?.uo_value ?? 0) * uoUnitCost;
 
   const [showModal, setShowModal] = useState(false);
   const [editCost,  setEditCost]  = useState<ProjectCost | undefined>();
@@ -310,6 +318,57 @@ function CostsContent() {
                         {cat.label} {Math.round((cat.ht / summary.grandHT) * 100)}%
                       </span>
                     ))}
+                  </div>
+                </div>
+              )}
+            </CardBody>
+          </Card>
+        )}
+
+        {/* Bloc UO — coûts liés aux Unités d'Œuvre */}
+        {(uoBudget > 0 || uoCostTotal > 0) && (
+          <Card className="border-amber-800/30 bg-amber-950/10">
+            <CardBody>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Wrench className="w-5 h-5 text-amber-400" />
+                  <h2 className="font-semibold text-white">Coûts liés aux UO ({currentYear})</h2>
+                </div>
+                <Link href={`/project/uo/?id=${id}`}
+                  className="text-xs text-amber-400 hover:text-amber-300 underline">
+                  Gérer les UO →
+                </Link>
+              </div>
+              <div className="grid grid-cols-3 gap-6">
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Budget UO alloué</p>
+                  <p className="text-xl font-bold text-amber-400">{fmt(uoBudget)}</p>
+                  <p className="text-xs text-slate-600">{project?.uo_value ?? 0} UO × {fmt(uoUnitCost)}/UO</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Consommé {currentYear}</p>
+                  <p className={`text-xl font-bold ${uoCostTotal > uoBudget ? "text-red-400" : "text-green-400"}`}>
+                    {fmt(uoCostTotal)}
+                  </p>
+                  <p className="text-xs text-slate-600">{uoConsumed.toFixed(1)} UO consommées</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">Reste à consommer</p>
+                  <p className={`text-xl font-bold ${uoBudget - uoCostTotal < 0 ? "text-red-400" : "text-slate-300"}`}>
+                    {fmt(Math.max(0, uoBudget - uoCostTotal))}
+                  </p>
+                  <p className="text-xs text-slate-600">
+                    {uoBudget > 0 ? `${Math.min(100, Math.round((uoCostTotal / uoBudget) * 100))} % consommé` : ""}
+                  </p>
+                </div>
+              </div>
+              {uoBudget > 0 && (
+                <div className="mt-3">
+                  <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${
+                      uoCostTotal > uoBudget ? "bg-red-500" :
+                      uoCostTotal > uoBudget * 0.9 ? "bg-amber-400" : "bg-amber-500"
+                    }`} style={{ width: `${Math.min(100, Math.round((uoCostTotal / uoBudget) * 100))}%` }} />
                   </div>
                 </div>
               )}
