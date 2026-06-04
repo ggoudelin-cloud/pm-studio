@@ -6,8 +6,9 @@ import Link from "next/link";
 import {
   useMilestones, useCreateMilestone, useUpdateMilestone, useDeleteMilestone,
   usePhases, useTasks, useMilestoneTasks, useAddMilestoneTask, useRemoveMilestoneTask,
-  useMyRoleInProject,
+  useMyMemberships,
 } from "@/hooks/useProjects";
+import { useAuthStore } from "@/stores/auth";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -289,7 +290,9 @@ function MilestonesContent() {
   const { data: milestones = [], isLoading } = useMilestones(id);
   const { data: phases = [] }                = usePhases(id);
   const { data: allTasks = [] }              = useTasks(id);
-  const { data: myRole }                     = useMyRoleInProject(id);
+  const { user } = useAuthStore();
+  const { data: memberships = [] }           = useMyMemberships();
+  const myRole                               = memberships.find(m => m.project_id === id)?.role ?? null;
   const deleteMilestone = useDeleteMilestone();
   const isReadOnly = myRole === "client" || myRole === "observer";
 

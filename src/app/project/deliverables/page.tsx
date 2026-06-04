@@ -3,7 +3,8 @@
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useDeliverables, useCreateDeliverable, useUpdateDeliverable, usePhases, useMyRoleInProject } from "@/hooks/useProjects";
+import { useDeliverables, useCreateDeliverable, useUpdateDeliverable, usePhases, useMyMemberships } from "@/hooks/useProjects";
+import { useAuthStore } from "@/stores/auth";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -97,7 +98,9 @@ function DeliverablesContent() {
   const id = searchParams.get("id");
   const { data: deliverables = [], isLoading } = useDeliverables(id);
   const { data: phases = [] } = usePhases(id);
-  const { data: myRole } = useMyRoleInProject(id);
+  const { user } = useAuthStore();
+  const { data: memberships = [] } = useMyMemberships();
+  const myRole = memberships.find(m => m.project_id === id)?.role ?? null;
   const isReadOnly = myRole === "client" || myRole === "observer";
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem]   = useState<Deliverable | undefined>();
