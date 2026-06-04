@@ -411,8 +411,6 @@ function GanttContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const VISIBLE_DAYS = 60;
-
   // Compute date range
   const today = useMemo(() => {
     const d = new Date();
@@ -421,7 +419,27 @@ function GanttContent() {
   }, []);
 
   const viewStart = useMemo(() => addDays(today, offsetDays - 7), [today, offsetDays]);
-  const days = useMemo(() => Array.from({ length: VISIBLE_DAYS }, (_, i) => addDays(viewStart, i)), [viewStart]);
+
+  // Nombre de jours dynamique : couvre toutes les barres + 30 jours de marge
+  const VISIBLE_DAYS = useMemo(() => {
+    let maxDay = 90; // minimum 90 jours
+    tasks.forEach(t => {
+      const endDate = t.due_date ?? (t as Task & { start_date?: string }).start_date;
+      if (endDate) {
+        const d = diffDays(viewStart, new Date(endDate)) + 30;
+        if (d > maxDay) maxDay = d;
+      }
+    });
+    milestones.forEach(m => {
+      if (m.due_date) {
+        const d = diffDays(viewStart, new Date(m.due_date)) + 30;
+        if (d > maxDay) maxDay = d;
+      }
+    });
+    return maxDay;
+  }, [tasks, milestones, viewStart]);
+
+  const days = useMemo(() => Array.from({ length: VISIBLE_DAYS }, (_, i) => addDays(viewStart, i)), [viewStart, VISIBLE_DAYS]);
 
   // Group days by month for header
   const months = useMemo(() => {
