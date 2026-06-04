@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/Badge";
 import { getMethodologyLabel, getMethodologyColor, getStatusLabel, formatDate } from "@/lib/utils";
 import {
   Plus, FolderKanban, TrendingUp, CheckCircle2, Clock, BarChart2,
-  DollarSign, Milestone, ArrowRight, Wrench, AlertTriangle,
+  Euro, Milestone, ArrowRight, Wrench, AlertTriangle,
 } from "lucide-react";
 import type { Project, ComplexityLevel } from "@/types";
 
@@ -82,7 +82,7 @@ function ExecutiveProjectCard({ project }: { project: Project }) {
 
         {budgetPct !== null && (
           <div className="flex items-center gap-2 text-xs">
-            <DollarSign className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <Euro className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <span className="text-slate-400">Budget consommé</span>
             <span className={`ml-auto font-medium ${budgetPct > 90 ? "text-red-400" : budgetPct > 70 ? "text-amber-400" : "text-green-400"}`}>
               {budgetPct} %

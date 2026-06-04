@@ -10,7 +10,7 @@ import {
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import {
-  BarChart2, TrendingUp, DollarSign, Users, AlertTriangle,
+  BarChart2, TrendingUp, Euro, Users, AlertTriangle,
   CheckCircle2, Clock, Milestone, ArrowUpRight,
 } from "lucide-react";
 import {
@@ -217,7 +217,7 @@ function ReportingContent() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { icon: TrendingUp,   color: "indigo",  value: `${progressPct} %`,       label: "Avancement",       sub: `${doneTasks}/${totalTasks} tâches` },
-            { icon: DollarSign,   color: budgetPct !== null && budgetPct > 90 ? "red" : "amber",
+            { icon: Euro,   color: budgetPct !== null && budgetPct > 90 ? "red" : "amber",
               value: budgetPct !== null ? `${budgetPct} %` : fmt(totalHT), label: "Budget consommé",
               sub: project?.budget ? `Restant : ${fmt(Math.max(0, project.budget - totalHT))}` : fmt(totalHT) },
             { icon: Milestone,    color: "amber",   value: `${achievedMs}/${milestones.length}`, label: "Jalons atteints", sub: missedMs > 0 ? `${missedMs} en retard` : "Aucun retard" },
@@ -291,7 +291,7 @@ function ReportingContent() {
           <Card>
             <CardHeader>
               <h2 className="font-semibold text-white text-sm flex items-center gap-2">
-                <DollarSign className="w-4 h-4 text-amber-400" /> Budget
+                <Euro className="w-4 h-4 text-amber-400" /> Budget
               </h2>
             </CardHeader>
             <CardBody className="space-y-4">
@@ -333,12 +333,12 @@ function ReportingContent() {
               )}
               {/* Bar chart par catégorie */}
               {costsByCat.length > 0 && (
-                <div className="h-28">
+                <div className="h-32 overflow-hidden">
                   <p className="text-xs text-slate-500 mb-2 font-medium uppercase tracking-wide">Ventilation par catégorie</p>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={costsByCat} layout="vertical" margin={{ left: 0, right: 8, top: 0, bottom: 0 }}>
+                    <BarChart data={costsByCat} layout="vertical" margin={{ left: 4, right: 12, top: 0, bottom: 0 }}>
                       <XAxis type="number" hide />
-                      <YAxis type="category" dataKey="cat" tick={{ fill: "#94a3b8", fontSize: 10 }} width={95} />
+                      <YAxis type="category" dataKey="cat" tick={{ fill: "#94a3b8", fontSize: 10 }} width={110} />
                       <Tooltip content={<CustomTooltip />} />
                       <Bar dataKey="total" name="Montant HT (€)" radius={[0, 4, 4, 0]}>
                         {costsByCat.map((entry, i) => <Cell key={i} fill={entry.fill} />)}

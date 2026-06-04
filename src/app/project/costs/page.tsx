@@ -10,7 +10,7 @@ import {
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { DollarSign, Plus, X, Users, Monitor, Server, Tag, Trash2, Edit2, TrendingUp, Wrench } from "lucide-react";
+import { Euro, Plus, X, Users, Monitor, Server, Tag, Trash2, Edit2, TrendingUp, Wrench } from "lucide-react";
 import type { ProjectCost, CostCategory } from "@/types";
 
 // ── Config catégories ────────────────────────────────────────────────────────
@@ -247,7 +247,7 @@ function CostsContent() {
               <Link href={`/project/?id=${id}`} className="hover:text-slate-300">← Projet</Link>
             </div>
             <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              <DollarSign className="w-6 h-6 text-green-400" /> Gestion des coûts
+              <Euro className="w-6 h-6 text-green-400" /> Gestion des coûts
             </h1>
             <p className="text-slate-400 text-sm mt-1">{costs.length} ligne(s) de coût</p>
           </div>
@@ -381,7 +381,7 @@ function CostsContent() {
           <div className="py-16 flex justify-center"><div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>
         ) : costs.length === 0 ? (
           <div className="py-16 text-center">
-            <DollarSign className="w-12 h-12 text-slate-700 mx-auto mb-3" />
+            <Euro className="w-12 h-12 text-slate-700 mx-auto mb-3" />
             <p className="text-slate-400">Aucun coût enregistré. Commencez par ajouter les ressources humaines, logiciels et infrastructure.</p>
           </div>
         ) : (
