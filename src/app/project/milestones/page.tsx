@@ -3,13 +3,16 @@
 import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useMilestones, useCreateMilestone, useUpdateMilestone, useDeleteMilestone, usePhases } from "@/hooks/useProjects";
+import {
+  useMilestones, useCreateMilestone, useUpdateMilestone, useDeleteMilestone,
+  usePhases, useTasks, useMilestoneTasks, useAddMilestoneTask, useRemoveMilestoneTask,
+} from "@/hooks/useProjects";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Milestone, Plus, X, CheckCircle2, AlertTriangle, Clock, Trash2, Edit2 } from "lucide-react";
-import type { Milestone as MilestoneType } from "@/types";
+import { Milestone, Plus, X, CheckCircle2, AlertTriangle, Clock, Trash2, Edit2, Link2, ListTodo } from "lucide-react";
+import type { Milestone as MilestoneType, Task } from "@/types";
 
 const STATUS_CONFIG = {
   pending:  { label: "En attente",  icon: Clock,         color: "text-slate-400",  border: "border-slate-700" },
@@ -17,6 +20,78 @@ const STATUS_CONFIG = {
   missed:   { label: "Manqué",      icon: AlertTriangle, color: "text-red-400",    border: "border-red-800/50" },
 };
 
+// ── Panneau de rattachement jalon ↔ tâches ────────────────────────────────
+function TaskLinker({ milestone, projectId, allTasks, onClose }: {
+  milestone: MilestoneType;
+  projectId: string;
+  allTasks: Task[];
+  onClose: () => void;
+}) {
+  const { data: linked = [] } = useMilestoneTasks(milestone.id);
+  const addLink    = useAddMilestoneTask();
+  const removeLink = useRemoveMilestoneTask();
+  const linkedIds  = new Set(linked.map(l => l.task_id));
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg flex flex-col max-h-[80vh]">
+        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between shrink-0">
+          <div>
+            <h2 className="font-semibold text-white">Tâches rattachées</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Jalon : {milestone.title}</p>
+          </div>
+          <button onClick={onClose}><X className="w-5 h-5 text-slate-400" /></button>
+        </div>
+        <div className="overflow-y-auto flex-1 p-4 space-y-2">
+          {allTasks.length === 0 ? (
+            <p className="text-center text-slate-500 py-6 text-sm">Aucune tâche dans ce projet.</p>
+          ) : allTasks.map(task => {
+            const isLinked = linkedIds.has(task.id);
+            const link = linked.find(l => l.task_id === task.id);
+            return (
+              <div key={task.id} className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                isLinked ? "bg-indigo-900/20 border-indigo-700/50" : "bg-slate-800/40 border-slate-700/50 hover:border-slate-600"
+              }`}>
+                <div className={`w-2 h-2 rounded-full shrink-0 ${
+                  task.status === "done" ? "bg-green-400" :
+                  task.status === "in_progress" ? "bg-indigo-400" :
+                  task.status === "blocked" ? "bg-red-400" : "bg-slate-500"
+                }`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-slate-200 truncate">{task.title}</p>
+                  <p className="text-xs text-slate-500">{
+                    task.status === "done" ? "Terminée" :
+                    task.status === "in_progress" ? "En cours" :
+                    task.status === "blocked" ? "Bloquée" : "À faire"
+                  }{task.due_date ? ` · ${new Date(task.due_date).toLocaleDateString("fr-FR")}` : ""}</p>
+                </div>
+                <button
+                  onClick={() => isLinked && link
+                    ? removeLink.mutate({ id: link.id, milestoneId: milestone.id, taskId: task.id })
+                    : addLink.mutate({ milestoneId: milestone.id, taskId: task.id })
+                  }
+                  disabled={addLink.isPending || removeLink.isPending}
+                  className={`text-xs px-3 py-1 rounded-md font-medium transition-colors ${
+                    isLinked
+                      ? "bg-red-900/30 text-red-400 hover:bg-red-900/50"
+                      : "bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30"
+                  }`}
+                >
+                  {isLinked ? "Retirer" : "Rattacher"}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+        <div className="px-6 py-4 border-t border-slate-800 shrink-0">
+          <p className="text-xs text-slate-500">{linkedIds.size} tâche(s) rattachée(s) à ce jalon</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal création/édition jalon ──────────────────────────────────────────────
 function MilestoneModal({ projectId, milestone, phases, onClose }: {
   projectId: string;
   milestone?: MilestoneType;
@@ -118,22 +193,109 @@ function MilestoneModal({ projectId, milestone, phases, onClose }: {
   );
 }
 
+// ── Carte jalon avec tâches rattachées ────────────────────────────────────────
+function MilestoneCard({
+  m, phases, allTasks, onEdit, onDelete, onLink,
+}: {
+  m: MilestoneType;
+  phases: { id: string; name: string }[];
+  allTasks: Task[];
+  onEdit: () => void;
+  onDelete: () => void;
+  onLink: () => void;
+}) {
+  const { data: linked = [] } = useMilestoneTasks(m.id);
+  const cfg = STATUS_CONFIG[m.status];
+  const Icon = cfg.icon;
+  const phase = phases.find(p => p.id === m.phase_id);
+  const overdue = m.status === "pending" && m.due_date && new Date(m.due_date) < new Date();
+  const linkedTasks = allTasks.filter(t => linked.some(l => l.task_id === t.id));
+  const tasksDone = linkedTasks.filter(t => t.status === "done").length;
+  const tasksPct = linkedTasks.length > 0 ? Math.round((tasksDone / linkedTasks.length) * 100) : null;
+
+  return (
+    <Card className={`${cfg.border} ${overdue ? "border-red-800/60" : ""} group`}>
+      <CardBody>
+        <div className="flex items-start gap-4">
+          <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+            m.status === "achieved" ? "bg-green-600/20" : m.status === "missed" ? "bg-red-600/20" : "bg-slate-800"
+          }`}>
+            <Icon className={`w-4 h-4 ${cfg.color}`} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-semibold text-slate-100">{m.title}</h3>
+              {overdue && <span className="text-xs bg-red-900/30 border border-red-800/50 text-red-300 px-2 py-0.5 rounded-full">En retard</span>}
+              {phase && <span className="text-xs text-indigo-400">{phase.name}</span>}
+            </div>
+            {m.description && <p className="text-sm text-slate-400 mt-0.5">{m.description}</p>}
+            <div className="flex items-center gap-4 mt-1.5 text-xs text-slate-500 flex-wrap">
+              {m.due_date && (
+                <span>Prévu : <span className={overdue ? "text-red-400" : "text-slate-300"}>
+                  {new Date(m.due_date).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })}
+                </span></span>
+              )}
+              {m.achieved_at && (
+                <span className="text-green-400">
+                  Atteint le {new Date(m.achieved_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "long" })}
+                </span>
+              )}
+              {linked.length > 0 && (
+                <span className="flex items-center gap-1 text-indigo-400">
+                  <ListTodo className="w-3 h-3" />
+                  {tasksDone}/{linked.length} tâche{linked.length > 1 ? "s" : ""}
+                  {tasksPct !== null && ` (${tasksPct} %)`}
+                </span>
+              )}
+            </div>
+            {/* Barre de progression des tâches */}
+            {linked.length > 0 && (
+              <div className="mt-2 w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${tasksPct === 100 ? "bg-green-500" : "bg-indigo-500"}`}
+                  style={{ width: `${tasksPct ?? 0}%` }}
+                />
+              </div>
+            )}
+          </div>
+          <div className="flex gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onClick={onLink}
+              className="text-slate-500 hover:text-indigo-400 transition-colors p-1.5 rounded-lg hover:bg-slate-800"
+              title="Rattacher des tâches">
+              <Link2 className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={onEdit}
+              className="text-slate-500 hover:text-indigo-400 transition-colors p-1.5 rounded-lg hover:bg-slate-800">
+              <Edit2 className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={onDelete}
+              className="text-slate-500 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-slate-800">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </CardBody>
+    </Card>
+  );
+}
+
 function MilestonesContent() {
   const searchParams = useSearchParams();
   const id = searchParams.get("id");
   const { data: milestones = [], isLoading } = useMilestones(id);
   const { data: phases = [] }                = usePhases(id);
+  const { data: allTasks = [] }              = useTasks(id);
   const deleteMilestone = useDeleteMilestone();
 
-  const [showModal,  setShowModal]  = useState(false);
-  const [editItem,   setEditItem]   = useState<MilestoneType | undefined>();
-  const [confirmDel, setConfirmDel] = useState<MilestoneType | null>(null);
+  const [showModal,    setShowModal]    = useState(false);
+  const [editItem,     setEditItem]     = useState<MilestoneType | undefined>();
+  const [linkItem,     setLinkItem]     = useState<MilestoneType | null>(null);
+  const [confirmDel,   setConfirmDel]   = useState<MilestoneType | null>(null);
 
   const achieved = milestones.filter(m => m.status === "achieved").length;
   const missed   = milestones.filter(m => m.status === "missed").length;
   const pending  = milestones.filter(m => m.status === "pending").length;
 
-  // Trier : en attente (par date), atteints, manqués
   const sorted = [...milestones].sort((a, b) => {
     const order = { pending: 0, missed: 1, achieved: 2 };
     if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status];
@@ -152,7 +314,7 @@ function MilestonesContent() {
               <Milestone className="w-6 h-6 text-amber-400" /> Jalons
             </h1>
             <p className="text-slate-400 text-sm mt-1">
-              {achieved} atteint{achieved > 1 ? "s" : ""} · {pending} en attente · {missed > 0 ? <span className="text-red-400">{missed} manqué{missed > 1 ? "s" : ""}</span> : "0 manqué"}
+              {achieved} atteint{achieved > 1 ? "s" : ""} · {pending} en attente · {missed > 0 ? `${missed} manqué${missed > 1 ? "s" : ""}` : "0 manqué"}
             </p>
           </div>
           <Button onClick={() => { setEditItem(undefined); setShowModal(true); }}>
@@ -160,7 +322,6 @@ function MilestonesContent() {
           </Button>
         </div>
 
-        {/* KPIs */}
         {milestones.length > 0 && (
           <div className="grid grid-cols-3 gap-4">
             {[
@@ -187,56 +348,17 @@ function MilestonesContent() {
           </div>
         ) : (
           <div className="space-y-3">
-            {sorted.map(m => {
-              const cfg     = STATUS_CONFIG[m.status];
-              const Icon    = cfg.icon;
-              const phase   = phases.find(p => p.id === m.phase_id);
-              const overdue = m.status === "pending" && m.due_date && new Date(m.due_date) < new Date();
-
-              return (
-                <Card key={m.id} className={`${cfg.border} ${overdue ? "border-red-800/60" : ""} group`}>
-                  <CardBody>
-                    <div className="flex items-start gap-4">
-                      <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
-                        m.status === "achieved" ? "bg-green-600/20" : m.status === "missed" ? "bg-red-600/20" : "bg-slate-800"
-                      }`}>
-                        <Icon className={`w-4 h-4 ${cfg.color}`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-semibold text-slate-100">{m.title}</h3>
-                          {overdue && <span className="text-xs bg-red-900/30 border border-red-800/50 text-red-300 px-2 py-0.5 rounded-full">En retard</span>}
-                          {phase && <span className="text-xs text-indigo-400">{phase.name}</span>}
-                        </div>
-                        {m.description && <p className="text-sm text-slate-400 mt-0.5">{m.description}</p>}
-                        <div className="flex items-center gap-4 mt-1.5 text-xs text-slate-500">
-                          {m.due_date && (
-                            <span>Prévu : <span className={overdue ? "text-red-400" : "text-slate-300"}>
-                              {new Date(m.due_date).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })}
-                            </span></span>
-                          )}
-                          {m.achieved_at && (
-                            <span className="text-green-400">
-                              Atteint le {new Date(m.achieved_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "long" })}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => { setEditItem(m); setShowModal(true); }}
-                          className="text-slate-500 hover:text-indigo-400 transition-colors p-1.5 rounded-lg hover:bg-slate-800">
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => setConfirmDel(m)}
-                          className="text-slate-500 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-slate-800">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </CardBody>
-                </Card>
-              );
-            })}
+            {sorted.map(m => (
+              <MilestoneCard
+                key={m.id}
+                m={m}
+                phases={phases}
+                allTasks={allTasks}
+                onEdit={() => { setEditItem(m); setShowModal(true); }}
+                onDelete={() => setConfirmDel(m)}
+                onLink={() => setLinkItem(m)}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -244,6 +366,15 @@ function MilestonesContent() {
       {showModal && id && (
         <MilestoneModal projectId={id} milestone={editItem} phases={phases}
           onClose={() => { setShowModal(false); setEditItem(undefined); }} />
+      )}
+
+      {linkItem && id && (
+        <TaskLinker
+          milestone={linkItem}
+          projectId={id}
+          allTasks={allTasks}
+          onClose={() => setLinkItem(null)}
+        />
       )}
 
       {confirmDel && (

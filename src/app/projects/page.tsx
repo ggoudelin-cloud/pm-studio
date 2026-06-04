@@ -10,15 +10,25 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { getMethodologyLabel, getMethodologyColor, getStatusLabel, formatDate } from "@/lib/utils";
 import { Plus, Search, X, Layers } from "lucide-react";
+import type { ComplexityLevel } from "@/types";
+
+const COMPLEXITY_BADGE: Record<ComplexityLevel, { label: string; color: string }> = {
+  simple:   { label: "N1 — Simple",   color: "bg-blue-900/20 text-blue-400 border-blue-700/40" },
+  medium:   { label: "N2 — Moyen",    color: "bg-green-900/20 text-green-400 border-green-700/40" },
+  high:     { label: "N3 — Élevé",    color: "bg-amber-900/20 text-amber-400 border-amber-700/40" },
+  critical: { label: "N4 — Critique", color: "bg-red-900/20 text-red-400 border-red-700/40" },
+};
 
 function NewProjectModal({ onClose }: { onClose: () => void }) {
   const createProject = useCreateProject();
-  const [name, setName]           = useState("");
-  const [description, setDesc]    = useState("");
-  const [domain, setDomain]       = useState("");
-  const [budget, setBudget]       = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate]     = useState("");
+  const [name,       setName]       = useState("");
+  const [description,setDesc]       = useState("");
+  const [domain,     setDomain]     = useState("");
+  const [budget,     setBudget]     = useState("");
+  const [startDate,  setStartDate]  = useState("");
+  const [endDate,    setEndDate]    = useState("");
+  const [complexity, setComplexity] = useState<ComplexityLevel | "">("");
+  const [uoValue,    setUoValue]    = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -29,6 +39,8 @@ function NewProjectModal({ onClose }: { onClose: () => void }) {
       budget: budget ? parseFloat(budget) : null,
       start_date: startDate || null,
       end_date: endDate || null,
+      complexity_level: complexity || null,
+      uo_value: uoValue ? parseFloat(uoValue) : null,
       status: "draft",
     });
     onClose();
@@ -36,39 +48,51 @@ function NewProjectModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg">
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between shrink-0">
           <h2 className="font-semibold text-white">Nouveau projet</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <Input id="name" label="Nom du projet *" placeholder="ex : Refonte ERP" value={name} onChange={(e) => setName(e.target.value)} required />
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-slate-300">Description</label>
-            <textarea
-              rows={3}
-              value={description}
-              onChange={(e) => setDesc(e.target.value)}
-              placeholder="Objectifs, contexte…"
-              className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-            />
-          </div>
-          <Input id="domain" label="Domaine métier" placeholder="ex : Finance, RH, E-commerce" value={domain} onChange={(e) => setDomain(e.target.value)} />
-          <div className="grid grid-cols-2 gap-3">
-            <Input id="budget" label="Budget (€)" type="number" placeholder="50000" value={budget} onChange={(e) => setBudget(e.target.value)} />
-            <div className="invisible" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Input id="startDate" label="Date de début" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-            <Input id="endDate"   label="Date de fin"   type="date" value={endDate}   onChange={(e) => setEndDate(e.target.value)} />
-          </div>
-          <div className="flex gap-3 pt-2">
-            <Button type="button" variant="secondary" onClick={onClose} className="flex-1 justify-center">Annuler</Button>
-            <Button type="submit" loading={createProject.isPending} className="flex-1 justify-center">Créer le projet</Button>
-          </div>
-        </form>
+        <div className="overflow-y-auto flex-1">
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <Input id="name" label="Nom du projet *" placeholder="ex : Migration Oracle DB" value={name} onChange={(e) => setName(e.target.value)} required />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-300">Description</label>
+              <textarea rows={3} value={description} onChange={(e) => setDesc(e.target.value)}
+                placeholder="Objectifs, contexte…"
+                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-slate-300">Niveau de complexité</label>
+                <select value={complexity} onChange={e => setComplexity(e.target.value as ComplexityLevel | "")}
+                  className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <option value="">Non défini</option>
+                  <option value="simple">Niveau 1 — Simple</option>
+                  <option value="medium">Niveau 2 — Moyen</option>
+                  <option value="high">Niveau 3 — Élevé</option>
+                  <option value="critical">Niveau 4 — Critique</option>
+                </select>
+              </div>
+              <Input id="uoValue" label="UO allouées" type="number" placeholder="ex: 14" value={uoValue} onChange={(e) => setUoValue(e.target.value)} />
+            </div>
+            <Input id="domain" label="Domaine métier" placeholder="ex : Production SI, Finance" value={domain} onChange={(e) => setDomain(e.target.value)} />
+            <div className="grid grid-cols-2 gap-3">
+              <Input id="budget" label="Budget (€)" type="number" placeholder="500000" value={budget} onChange={(e) => setBudget(e.target.value)} />
+              <div className="invisible" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Input id="startDate" label="Date de début" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              <Input id="endDate"   label="Date de fin"   type="date" value={endDate}   onChange={(e) => setEndDate(e.target.value)} />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <Button type="button" variant="secondary" onClick={onClose} className="flex-1 justify-center">Annuler</Button>
+              <Button type="submit" loading={createProject.isPending} className="flex-1 justify-center">Créer le projet</Button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );
@@ -144,9 +168,14 @@ export default function ProjectsPage() {
                     )}
                     <div className="flex items-center gap-2 flex-wrap mt-auto pt-2">
                       {project.methodology_applied && (
-                        <Badge variant={getMethodologyColor(project.methodology_applied) }>
+                        <Badge variant={getMethodologyColor(project.methodology_applied)}>
                           {getMethodologyLabel(project.methodology_applied)}
                         </Badge>
+                      )}
+                      {project.complexity_level && COMPLEXITY_BADGE[project.complexity_level] && (
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${COMPLEXITY_BADGE[project.complexity_level].color}`}>
+                          {COMPLEXITY_BADGE[project.complexity_level].label}
+                        </span>
                       )}
                       {project.domain && (
                         <Badge variant="default">{project.domain}</Badge>

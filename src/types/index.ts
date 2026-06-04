@@ -6,6 +6,7 @@ export type PhaseType =
   | "requirements" | "design" | "architecture"
   | "development" | "testing" | "validation"
   | "deployment" | "maintenance";
+export type ComplexityLevel = "simple" | "medium" | "high" | "critical";
 
 export interface Profile {
   id: string;
@@ -33,6 +34,8 @@ export interface Project {
   budget: number | null;
   start_date: string | null;
   end_date: string | null;
+  complexity_level: ComplexityLevel | null;
+  uo_value: number | null;
   context_team_size: number | null;
   context_domain_maturity: number | null;
   context_client_proximity: number | null;
@@ -58,8 +61,8 @@ export interface Task {
   assignee_id: string | null;
   status: TaskStatus;
   priority: number;
+  progress_pct: number;
   methodology: Methodology | null;
-  // Scores classification
   score_stability: number | null;
   score_complexity: number | null;
   score_doc_dependency: number | null;
@@ -69,7 +72,6 @@ export interface Task {
   score_client_validation: number | null;
   score_team_experience: number | null;
   deadline_pressure: "low" | "medium" | "high" | null;
-  // Résultats moteur
   decision_score_v: number | null;
   decision_score_agile: number | null;
   methodology_recommendation: Methodology | null;
@@ -174,6 +176,13 @@ export interface Milestone {
   created_at: string;
 }
 
+export interface MilestoneTask {
+  id: string;
+  milestone_id: string;
+  task_id: string;
+  created_at: string;
+}
+
 export interface MethodologyDecision {
   id: string;
   project_id: string;
@@ -275,4 +284,112 @@ export interface KanbanCard {
   position: number;
   wip_limit: number | null;
   created_at: string;
+}
+
+// ── Nouveaux types CDC CPP ────────────────────────────────────────────────────
+
+export type MepStatus = "planned" | "go" | "nogo" | "in_progress" | "pss" | "psc" | "completed" | "cancelled" | "incident";
+export type MepEnvironment = "dev" | "integration" | "preprod" | "production";
+
+export interface ChronogramStep {
+  id: string;
+  time: string;
+  label: string;
+  done: boolean;
+  incident?: string;
+}
+
+export interface MepOperation {
+  id: string;
+  project_id: string;
+  title: string;
+  description: string | null;
+  planned_date: string | null;
+  execution_date: string | null;
+  environment: MepEnvironment;
+  is_hno: boolean;
+  status: MepStatus;
+  go_nogo_decision: "go" | "nogo" | null;
+  go_nogo_reason: string | null;
+  go_nogo_decided_by: string | null;
+  go_nogo_at: string | null;
+  chronogram: ChronogramStep[];
+  incidents: string[];
+  action_plans: string[];
+  bilan: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CommitteeType = "copil" | "comev" | "cab" | "rcc" | "rci" | "weekly" | "other";
+export type CommitteeStatus = "scheduled" | "held" | "cancelled";
+
+export interface CommitteeActionItem {
+  id: string;
+  label: string;
+  owner: string;
+  due_date: string;
+  done: boolean;
+}
+
+export interface Committee {
+  id: string;
+  project_id: string | null;
+  title: string;
+  committee_type: CommitteeType;
+  scheduled_at: string | null;
+  held_at: string | null;
+  status: CommitteeStatus;
+  agenda: string | null;
+  minutes: string | null;
+  attendees: string[];
+  action_items: CommitteeActionItem[];
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FlashReport {
+  id: string;
+  project_id: string;
+  week_number: number | null;
+  year: number | null;
+  general_info: string | null;
+  check_rssi: boolean;
+  check_design_authority: boolean;
+  check_test_strategy: boolean;
+  check_industrialization: boolean;
+  check_comev: boolean;
+  check_pv_recette: boolean;
+  environments_status: Record<string, string>;
+  alerts: string | null;
+  next_actions: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UoLog {
+  id: string;
+  project_id: string;
+  month: number;
+  year: number;
+  uo_consumed: number;
+  uo_planned: number;
+  notes: string | null;
+  created_at: string;
+}
+
+export type SkillLevel = "knowledge" | "medium" | "advanced" | "mastery" | "expert";
+
+export interface SkillMatrixEntry {
+  id: string;
+  project_id: string;
+  member_id: string;
+  skill_name: string;
+  skill_level: SkillLevel;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 }

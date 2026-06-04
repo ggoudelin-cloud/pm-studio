@@ -5,7 +5,8 @@ import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
 import type {
   Project, Task, Sprint, UserStory, ProjectPhase, Milestone,
-  ProjectMember, MemberRole,
+  ProjectMember, MemberRole, MepOperation, Committee, FlashReport,
+  UoLog, SkillMatrixEntry, MilestoneTask,
 } from "@/types";
 import toast from "react-hot-toast";
 
@@ -86,6 +87,24 @@ export function useTasks(projectId: string | null) {
   });
 }
 
+export function useMyTasks(projectId: string | null) {
+  const { user } = useAuthStore();
+  return useQuery({
+    queryKey: ["my-tasks", projectId, user?.id],
+    enabled: !!projectId && !!user,
+    queryFn: async () => {
+      const { data, error } = await DB()
+        .from("tasks")
+        .select("*")
+        .eq("project_id", projectId!)
+        .eq("assignee_id", user!.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as Task[];
+    },
+  });
+}
+
 export function useCreateTask() {
   const qc = useQueryClient();
   return useMutation({
@@ -112,6 +131,7 @@ export function useUpdateTask() {
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["tasks", data.project_id] });
+      qc.invalidateQueries({ queryKey: ["my-tasks", data.project_id] });
       toast.success("Tâche mise à jour !");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -128,6 +148,7 @@ export function useUpdateTaskSilent() {
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["tasks", data.project_id] });
+      qc.invalidateQueries({ queryKey: ["my-tasks", data.project_id] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -187,6 +208,71 @@ export function useRemoveDependency() {
       return { projectId };
     },
     onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["task-deps", d.projectId] }); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+// ── Milestone ↔ Task links ──────────────────────────────────────────────────
+export function useMilestoneTasks(milestoneId: string | null) {
+  return useQuery({
+    queryKey: ["milestone-tasks", milestoneId],
+    enabled: !!milestoneId,
+    queryFn: async () => {
+      const { data, error } = await DB()
+        .from("milestone_tasks")
+        .select("*")
+        .eq("milestone_id", milestoneId!);
+      if (error) throw error;
+      return data as MilestoneTask[];
+    },
+  });
+}
+
+export function useTaskMilestones(taskId: string | null) {
+  return useQuery({
+    queryKey: ["task-milestones", taskId],
+    enabled: !!taskId,
+    queryFn: async () => {
+      const { data, error } = await DB()
+        .from("milestone_tasks")
+        .select("*, milestones(id, title, due_date, status)")
+        .eq("task_id", taskId!);
+      if (error) throw error;
+      return data as (MilestoneTask & { milestones: { id: string; title: string; due_date: string | null; status: string } })[];
+    },
+  });
+}
+
+export function useAddMilestoneTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ milestoneId, taskId }: { milestoneId: string; taskId: string }) => {
+      const { error } = await DB().from("milestone_tasks").insert({ milestone_id: milestoneId, task_id: taskId });
+      if (error) throw error;
+      return { milestoneId, taskId };
+    },
+    onSuccess: (d) => {
+      qc.invalidateQueries({ queryKey: ["milestone-tasks", d.milestoneId] });
+      qc.invalidateQueries({ queryKey: ["task-milestones", d.taskId] });
+      toast.success("Tâche rattachée au jalon.");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useRemoveMilestoneTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, milestoneId, taskId }: { id: string; milestoneId: string; taskId: string }) => {
+      const { error } = await DB().from("milestone_tasks").delete().eq("id", id);
+      if (error) throw error;
+      return { milestoneId, taskId };
+    },
+    onSuccess: (d) => {
+      qc.invalidateQueries({ queryKey: ["milestone-tasks", d.milestoneId] });
+      qc.invalidateQueries({ queryKey: ["task-milestones", d.taskId] });
+      toast.success("Tâche retirée du jalon.");
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 }
@@ -495,6 +581,24 @@ export function useMyMemberships() {
   });
 }
 
+export function useMyRoleInProject(projectId: string | null) {
+  const { user } = useAuthStore();
+  return useQuery({
+    queryKey: ["my-role", projectId, user?.id],
+    enabled: !!projectId && !!user,
+    queryFn: async () => {
+      const { data, error } = await DB()
+        .from("project_members")
+        .select("role")
+        .eq("project_id", projectId!)
+        .eq("user_id", user!.id)
+        .limit(1);
+      if (error) throw error;
+      return (data?.[0]?.role ?? null) as MemberRole | null;
+    },
+  });
+}
+
 export function useProjectMembers(projectId: string | null) {
   const { user } = useAuthStore();
   return useQuery({
@@ -700,6 +804,265 @@ export function useDeleteRisk() {
       return { project_id };
     },
     onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["risks", d.project_id] }); toast.success("Risque supprimé."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+// ── MEP — Mises En Production ─────────────────────────────────────────────────
+export function useMepOperations(projectId: string | null) {
+  const { user } = useAuthStore();
+  return useQuery({
+    queryKey: ["mep", projectId],
+    enabled: !!projectId && !!user,
+    queryFn: async () => {
+      const { data, error } = await DB()
+        .from("mep_operations")
+        .select("*")
+        .eq("project_id", projectId!)
+        .order("planned_date", { ascending: false });
+      if (error) throw error;
+      return data as MepOperation[];
+    },
+  });
+}
+
+export function useCreateMep() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (values: Omit<MepOperation, "id" | "created_at" | "updated_at" | "chronogram" | "incidents" | "action_plans"> & { project_id: string }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await DB().from("mep_operations").insert({ ...values, created_by: user!.id, chronogram: [], incidents: [], action_plans: [] });
+      if (error) throw error;
+      return { project_id: values.project_id };
+    },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["mep", d.project_id] }); toast.success("MEP créée !"); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useUpdateMep() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, project_id, ...values }: Partial<MepOperation> & { id: string; project_id: string }) => {
+      const { error } = await DB().from("mep_operations").update({ ...values, updated_at: new Date().toISOString() }).eq("id", id);
+      if (error) throw error;
+      return { project_id };
+    },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["mep", d.project_id] }); toast.success("MEP mise à jour."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useDeleteMep() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, project_id }: { id: string; project_id: string }) => {
+      const { error } = await DB().from("mep_operations").delete().eq("id", id);
+      if (error) throw error;
+      return { project_id };
+    },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["mep", d.project_id] }); toast.success("MEP supprimée."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+// ── Comitologie ───────────────────────────────────────────────────────────────
+export function useCommittees(projectId: string | null) {
+  const { user } = useAuthStore();
+  return useQuery({
+    queryKey: ["committees", projectId],
+    enabled: !!projectId && !!user,
+    queryFn: async () => {
+      const { data, error } = await DB()
+        .from("committees")
+        .select("*")
+        .eq("project_id", projectId!)
+        .order("scheduled_at", { ascending: false });
+      if (error) throw error;
+      return data as Committee[];
+    },
+  });
+}
+
+export function useCreateCommittee() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (values: Omit<Committee, "id" | "created_at" | "updated_at" | "attendees" | "action_items"> & { project_id: string }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await DB().from("committees").insert({ ...values, created_by: user!.id, attendees: [], action_items: [] });
+      if (error) throw error;
+      return { project_id: values.project_id };
+    },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["committees", d.project_id] }); toast.success("Comité créé !"); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useUpdateCommittee() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, project_id, ...values }: Partial<Committee> & { id: string; project_id: string }) => {
+      const { error } = await DB().from("committees").update({ ...values, updated_at: new Date().toISOString() }).eq("id", id);
+      if (error) throw error;
+      return { project_id };
+    },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["committees", d.project_id] }); toast.success("Comité mis à jour."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useDeleteCommittee() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, project_id }: { id: string; project_id: string }) => {
+      const { error } = await DB().from("committees").delete().eq("id", id);
+      if (error) throw error;
+      return { project_id };
+    },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["committees", d.project_id] }); toast.success("Comité supprimé."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+// ── Rapport Flash ─────────────────────────────────────────────────────────────
+export function useFlashReports(projectId: string | null) {
+  const { user } = useAuthStore();
+  return useQuery({
+    queryKey: ["flash-reports", projectId],
+    enabled: !!projectId && !!user,
+    queryFn: async () => {
+      const { data, error } = await DB()
+        .from("flash_reports")
+        .select("*")
+        .eq("project_id", projectId!)
+        .order("year", { ascending: false })
+        .order("week_number", { ascending: false });
+      if (error) throw error;
+      return data as FlashReport[];
+    },
+  });
+}
+
+export function useCreateFlashReport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (values: Omit<FlashReport, "id" | "created_at" | "updated_at">) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await DB().from("flash_reports").insert({ ...values, created_by: user!.id });
+      if (error) throw error;
+      return { project_id: values.project_id };
+    },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["flash-reports", d.project_id] }); toast.success("Rapport Flash créé !"); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useUpdateFlashReport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, project_id, ...values }: Partial<FlashReport> & { id: string; project_id: string }) => {
+      const { error } = await DB().from("flash_reports").update({ ...values, updated_at: new Date().toISOString() }).eq("id", id);
+      if (error) throw error;
+      return { project_id };
+    },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["flash-reports", d.project_id] }); toast.success("Rapport Flash mis à jour."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+// ── UO Logs ───────────────────────────────────────────────────────────────────
+export function useUoLogs(projectId: string | null) {
+  const { user } = useAuthStore();
+  return useQuery({
+    queryKey: ["uo-logs", projectId],
+    enabled: !!projectId && !!user,
+    queryFn: async () => {
+      const { data, error } = await DB()
+        .from("uo_logs")
+        .select("*")
+        .eq("project_id", projectId!)
+        .order("year")
+        .order("month");
+      if (error) throw error;
+      return data as UoLog[];
+    },
+  });
+}
+
+export function useAllUoLogs() {
+  const { user } = useAuthStore();
+  return useQuery({
+    queryKey: ["uo-logs-all"],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await DB()
+        .from("uo_logs")
+        .select("*")
+        .order("year")
+        .order("month");
+      if (error) throw error;
+      return data as UoLog[];
+    },
+  });
+}
+
+export function useUpsertUoLog() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (values: Omit<UoLog, "id" | "created_at">) => {
+      const { error } = await DB().from("uo_logs").upsert(values, { onConflict: "project_id,month,year" });
+      if (error) throw error;
+      return { project_id: values.project_id };
+    },
+    onSuccess: (d) => {
+      qc.invalidateQueries({ queryKey: ["uo-logs", d.project_id] });
+      qc.invalidateQueries({ queryKey: ["uo-logs-all"] });
+      toast.success("UO mis à jour.");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+// ── Matrice de compétences ────────────────────────────────────────────────────
+export function useSkillMatrix(projectId: string | null) {
+  const { user } = useAuthStore();
+  return useQuery({
+    queryKey: ["skills", projectId],
+    enabled: !!projectId && !!user,
+    queryFn: async () => {
+      const { data, error } = await DB()
+        .from("skill_matrix")
+        .select("*")
+        .eq("project_id", projectId!)
+        .order("skill_name");
+      if (error) throw error;
+      return data as SkillMatrixEntry[];
+    },
+  });
+}
+
+export function useUpsertSkill() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (values: Omit<SkillMatrixEntry, "id" | "created_at" | "updated_at">) => {
+      const { error } = await DB().from("skill_matrix").upsert({ ...values, updated_at: new Date().toISOString() }, { onConflict: "project_id,member_id,skill_name" });
+      if (error) throw error;
+      return { project_id: values.project_id };
+    },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["skills", d.project_id] }); toast.success("Compétence mise à jour."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useDeleteSkill() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, project_id }: { id: string; project_id: string }) => {
+      const { error } = await DB().from("skill_matrix").delete().eq("id", id);
+      if (error) throw error;
+      return { project_id };
+    },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["skills", d.project_id] }); toast.success("Compétence supprimée."); },
     onError: (e: Error) => toast.error(e.message),
   });
 }

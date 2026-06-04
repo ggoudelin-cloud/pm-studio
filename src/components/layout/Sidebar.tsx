@@ -78,8 +78,9 @@ export default function Sidebar() {
   async function handleLogout() {
     setLoggingOut(true);
     try {
-      reset(); // loading: true avant signOut pour bloquer l'AuthGuard
-      await supabase.auth.signOut(); // déclenche onAuthStateChange SIGNED_OUT → qc.clear()
+      await supabase.auth.signOut();
+      qc.clear();
+      reset();
       router.replace("/login/");
     } catch {
       toast.error("Erreur lors de la déconnexion");
