@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useProjects, useCreateProject } from "@/hooks/useProjects";
+import { useProjects, useCreateProject, useMyMemberships, useMyTaskProjectIds } from "@/hooks/useProjects";
+import { useAuthStore } from "@/stores/auth";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -99,14 +100,32 @@ function NewProjectModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function ProjectsPage() {
+  const { user } = useAuthStore();
   const { data: projects, isLoading } = useProjects();
+  const { data: memberships = [] } = useMyMemberships();
+  const { data: myTaskProjectIds = [] } = useMyTaskProjectIds();
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
 
-  const filtered = projects?.filter((p) =>
+  // Peut créer un projet : propriétaire OU rôle pm/pmo
+  const canCreateProject =
+    projects?.some(p => p.owner_id === user?.id) ||
+    memberships.some(m => m.role === "pm" || m.role === "pmo") ||
+    (memberships.length === 0 && !isLoading);
+
+  // Dev : ne voir que les projets où il a des tâches assignées
+  const isDevOnly = memberships.length > 0 &&
+    memberships.every(m => m.role === "dev" || m.role === "client" || m.role === "observer") &&
+    memberships.some(m => m.role === "dev");
+
+  const visibleProjects = isDevOnly
+    ? (projects ?? []).filter(p => myTaskProjectIds.includes(p.id))
+    : (projects ?? []);
+
+  const filtered = visibleProjects.filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.domain?.toLowerCase().includes(search.toLowerCase())
-  ) ?? [];
+    (p.domain?.toLowerCase().includes(search.toLowerCase()) ?? false)
+  );
 
   return (
     <DashboardLayout>
@@ -116,10 +135,12 @@ export default function ProjectsPage() {
             <h1 className="text-2xl font-bold text-white">Projets</h1>
             <p className="text-slate-400 text-sm mt-1">{projects?.length ?? 0} projet(s)</p>
           </div>
-          <Button onClick={() => setShowModal(true)}>
-            <Plus className="w-4 h-4" />
-            Nouveau projet
-          </Button>
+          {canCreateProject && (
+            <Button onClick={() => setShowModal(true)}>
+              <Plus className="w-4 h-4" />
+              Nouveau projet
+            </Button>
+          )}
         </div>
 
         {/* Recherche */}

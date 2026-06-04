@@ -87,6 +87,22 @@ export function useTasks(projectId: string | null) {
   });
 }
 
+export function useMyTaskProjectIds() {
+  const { user } = useAuthStore();
+  return useQuery({
+    queryKey: ["my-task-project-ids", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await DB()
+        .from("tasks")
+        .select("project_id")
+        .eq("assignee_id", user!.id);
+      if (error) throw error;
+      return [...new Set((data ?? []).map((t: { project_id: string }) => t.project_id))] as string[];
+    },
+  });
+}
+
 export function useMyTasks(projectId: string | null) {
   const { user } = useAuthStore();
   return useQuery({

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import {
   useProjects, useMyMemberships, useTasks, useProjectCosts,
-  useMilestones, useAllUoLogs,
+  useMilestones, useAllUoLogs, useMyTaskProjectIds,
 } from "@/hooks/useProjects";
 import { useAuthStore } from "@/stores/auth";
 import DashboardLayout from "@/components/layout/DashboardLayout";
@@ -354,6 +354,7 @@ export default function DashboardPage() {
   const { profile, user } = useAuthStore();
   const { data: projects, isLoading } = useProjects();
   const { data: memberships = [] } = useMyMemberships();
+  const { data: myTaskProjectIds = [] } = useMyTaskProjectIds();
 
   const prenom = profile?.full_name?.split(" ")[0] ?? user?.email?.split("@")[0];
 
@@ -371,6 +372,17 @@ export default function DashboardPage() {
 
   const isClientOnly = pmProjects.length === 0 && clientProjects.length > 0;
 
+  // Dev : ne voir que les projets où il a des tâches assignées
+  const isDevOnly = memberships.length > 0 &&
+    memberships.every(m => m.role === "dev" || m.role === "client" || m.role === "observer") &&
+    memberships.some(m => m.role === "dev");
+
+  // Peut créer un projet : propriétaire OU rôle pm/pmo
+  const canCreateProject =
+    projects?.some(p => p.owner_id === user?.id) ||
+    memberships.some(m => m.role === "pm" || m.role === "pmo") ||
+    (memberships.length === 0 && !isLoading);
+
   return (
     <DashboardLayout>
       <div className="p-8 max-w-6xl mx-auto space-y-8">
@@ -381,7 +393,7 @@ export default function DashboardPage() {
               {new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date())}
             </p>
           </div>
-          {!isClientOnly && (
+          {!isClientOnly && canCreateProject && (
             <Link href="/projects/"
               className="inline-flex items-center gap-2 rounded-lg font-medium transition-colors bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm px-4 py-2 text-sm">
               <Plus className="w-4 h-4" /> Nouveau projet
@@ -406,7 +418,10 @@ export default function DashboardPage() {
 
         {!isClientOnly && (
           <PMDashboard
-            projects={pmProjects.length > 0 ? pmProjects : projects}
+            projects={(() => {
+              if (isDevOnly) return (projects ?? []).filter(p => myTaskProjectIds.includes(p.id));
+              return pmProjects.length > 0 ? pmProjects : projects;
+            })()}
             isLoading={isLoading}
           />
         )}
