@@ -606,18 +606,32 @@ function GanttContent() {
                         ) : null)}
                         {bar && (() => {
                           const pct = task.status === "done" ? 100 : (task.progress_pct ?? 0);
+                          // Avancement attendu à date : position de la ligne « aujourd'hui » dans la barre
+                          const progressPx     = (pct / 100) * bar.w;
+                          const todayOffsetPx  = barStart ? diffDays(barStart, today) * DAY_W : 0;
+                          const todayClampedPx = Math.max(0, Math.min(bar.w, todayOffsetPx));
+                          // En retard : la tâche est commencée, non terminée, et l'avancement réel est en deçà de la date du jour
+                          const isLate = task.status !== "done" && task.status !== "cancelled"
+                            && !isDragging && todayOffsetPx > 0 && todayClampedPx > progressPx + 0.5;
                           return (
                           <div
                             style={{ position: "absolute", left: bar.x, width: bar.w, height: 24, borderRadius: 4, zIndex: 2, cursor: "grab" }}
-                            className={`${METH_COLORS[task.methodology_recommendation ?? ""] ?? "bg-slate-600"} ${isDragging ? "opacity-100 ring-2 ring-white/40" : "opacity-80 hover:opacity-100"} transition-opacity flex items-center relative overflow-hidden`}
+                            className={`${METH_COLORS[task.methodology_recommendation ?? ""] ?? "bg-slate-600"} ${isDragging ? "opacity-100 ring-2 ring-white/40" : isLate ? "opacity-90 hover:opacity-100 ring-1 ring-red-500/60" : "opacity-80 hover:opacity-100"} transition-opacity flex items-center relative overflow-hidden`}
                             onClick={() => { if (justDraggedRef.current) { justDraggedRef.current = false; return; } setEditTask(task); }}
-                            title={`${task.title} · avancement ${pct}%${isDragging ? ` · ${effStart} → ${effEnd}` : ""}`}
+                            title={`${task.title} · avancement ${pct}%${isLate ? " · ⚠ EN RETARD" : ""}${isDragging ? ` · ${effStart} → ${effEnd}` : ""}`}
                           >
                             {/* Remplissage d'avancement (portion réalisée à date) */}
                             {pct > 0 && (
                               <div
                                 style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${pct}%`, borderRadius: pct >= 100 ? 4 : "4px 0 0 4px", zIndex: 1 }}
                                 className={`pointer-events-none transition-all ${pct >= 100 ? "bg-green-600/70" : "bg-black/40"}`}
+                              />
+                            )}
+                            {/* Zone de retard : entre l'avancement réel et la date du jour */}
+                            {isLate && (
+                              <div
+                                style={{ position: "absolute", left: progressPx, top: 0, height: "100%", width: todayClampedPx - progressPx, zIndex: 1 }}
+                                className="pointer-events-none bg-red-600/70 transition-all"
                               />
                             )}
                             {/* Poignée gauche (redimensionnement) */}
