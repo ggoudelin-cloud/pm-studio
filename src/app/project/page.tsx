@@ -18,11 +18,12 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { getMethodologyLabel, getMethodologyColor, getStatusLabel, formatDate } from "@/lib/utils";
 import {
-  ArrowRight, CalendarDays, Banknote, Users, Download, X, Edit2, Trash2, Wrench,
+  ArrowRight, CalendarDays, Banknote, Users, Download, X, Edit2, Trash2, Wrench, AlertTriangle,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { getProjectModules } from "@/lib/project-modules";
-import type { Project, MemberRole, ComplexityLevel } from "@/types";
+import { computeProjectKpis } from "@/lib/project-kpis";
+import type { Project, MemberRole, ComplexityLevel, Task, Milestone, ProjectRisk, UoLog, ProjectCost } from "@/types";
 
 // ── Config complexité ────────────────────────────────────────────────────────
 const COMPLEXITY_CONFIG: Record<ComplexityLevel, { label: string; color: string; bg: string; dot: string }> = {
@@ -119,6 +120,107 @@ function EditProjectModal({ project, onClose }: { project: Project; onClose: () 
           </form>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Cockpit projet : santé, KPI live et alertes ──────────────────────────────
+function ProjectCockpit({ project, tasks, milestones, risks, uoLogs, costs, isClient }: {
+  project: Project;
+  tasks: Task[];
+  milestones: Milestone[];
+  risks: ProjectRisk[];
+  uoLogs: UoLog[];
+  costs: ProjectCost[];
+  isClient: boolean;
+}) {
+  const kpis = computeProjectKpis({ project, tasks, milestones, risks, uoLogs, costs });
+
+  const today = new Date().toISOString().slice(0, 10);
+  const pendingDated = milestones.filter(m => m.status === "pending" && m.due_date);
+  const nextMilestone = pendingDated
+    .filter(m => m.due_date! >= today)
+    .sort((a, b) => (a.due_date! > b.due_date! ? 1 : -1))[0];
+  const overdueMs = pendingDated.filter(m => m.due_date! < today).length;
+  const daysTo = (d: string) => Math.round((new Date(d).getTime() - new Date(today).getTime()) / 86400000);
+
+  const healthColor =
+    kpis.health.level === "red"   ? { text: "text-red-400",   dot: "bg-red-400",   border: "border-red-800/50",   bg: "bg-red-950/20" } :
+    kpis.health.level === "amber" ? { text: "text-amber-400", dot: "bg-amber-400", border: "border-amber-800/50", bg: "bg-amber-950/20" } :
+                                    { text: "text-green-400", dot: "bg-green-400", border: "border-green-800/50", bg: "bg-green-950/10" };
+
+  const kpiCards = [
+    { label: "Avancement", value: `${kpis.progressPct}%`, sub: `${kpis.taskDone}/${kpis.taskActive} tâches`, color: kpis.progressPct >= 80 ? "text-green-400" : kpis.progressPct >= 40 ? "text-indigo-400" : "text-amber-400" },
+    ...(!isClient && kpis.hasBudget ? [{ label: "Budget consommé", value: `${kpis.pctBudget}%`, sub: `reste ${new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(kpis.remaining)}`, color: kpis.pctBudget > 100 ? "text-red-400" : kpis.pctBudget > 85 ? "text-amber-400" : "text-green-400" }] : []),
+    { label: "Tâches en retard", value: String(kpis.taskLate), sub: kpis.taskLate > 0 ? "à traiter" : "aucune", color: kpis.taskLate > 0 ? "text-red-400" : "text-green-400" },
+    { label: "Jalons atteints", value: `${kpis.msAchieved}/${kpis.msTotal}`, sub: kpis.msMissed > 0 ? `${kpis.msMissed} manqué(s)` : "à jour", color: kpis.msMissed > 0 ? "text-red-400" : "text-slate-200" },
+  ];
+
+  // Construction des alertes
+  const alerts: { tone: "red" | "amber" | "slate"; text: string }[] = [];
+  if (kpis.taskLate > 0) alerts.push({ tone: "red", text: `${kpis.taskLate} tâche(s) en retard de planning` });
+  if (kpis.hasBudget && kpis.pctBudget > 100) alerts.push({ tone: "red", text: `Dépassement budgétaire (${kpis.pctBudget}%)` });
+  else if (kpis.hasBudget && kpis.pctBudget > 85) alerts.push({ tone: "amber", text: `Budget à surveiller (${kpis.pctBudget}%)` });
+  if (overdueMs > 0) alerts.push({ tone: "red", text: `${overdueMs} jalon(s) échu(s) non atteint(s)` });
+  if (nextMilestone) {
+    const dd = daysTo(nextMilestone.due_date!);
+    alerts.push({ tone: dd <= 7 ? "amber" : "slate", text: `Prochain jalon : ${nextMilestone.title} (${formatDate(nextMilestone.due_date!)}${dd >= 0 ? ` · J-${dd}` : ""})` });
+  }
+  if (kpis.risksOpen > 0) alerts.push({ tone: "amber", text: `${kpis.risksOpen} risque(s) ouvert(s)` });
+
+  return (
+    <div className="space-y-4">
+      {/* Bandeau santé + progression */}
+      <Card className={`${healthColor.border} ${healthColor.bg}`}>
+        <CardBody className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex items-center gap-2.5 shrink-0">
+            <span className={`w-2.5 h-2.5 rounded-full ${healthColor.dot}`} />
+            <div>
+              <p className="text-xs text-slate-500">État du projet</p>
+              <p className={`text-sm font-semibold ${healthColor.text}`}>{kpis.health.label}</p>
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-slate-400">Avancement global</span>
+              <span className="text-slate-300 font-medium">{kpis.progressPct}%</span>
+            </div>
+            <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+              <div className={`h-full rounded-full transition-all ${kpis.progressPct >= 80 ? "bg-green-500" : kpis.progressPct >= 50 ? "bg-indigo-500" : "bg-amber-500"}`}
+                style={{ width: `${kpis.progressPct}%` }} />
+            </div>
+          </div>
+        </CardBody>
+      </Card>
+
+      {/* KPI live */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {kpiCards.map(c => (
+          <Card key={c.label}>
+            <CardBody className="py-3">
+              <p className="text-xs text-slate-500">{c.label}</p>
+              <p className={`text-xl font-bold ${c.color}`}>{c.value}</p>
+              <p className="text-xs text-slate-600 mt-0.5">{c.sub}</p>
+            </CardBody>
+          </Card>
+        ))}
+      </div>
+
+      {/* Alertes */}
+      {alerts.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {alerts.map((a, i) => (
+            <span key={i} className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border ${
+              a.tone === "red"   ? "bg-red-950/30 border-red-800/50 text-red-300" :
+              a.tone === "amber" ? "bg-amber-950/30 border-amber-800/50 text-amber-300" :
+                                   "bg-slate-800/50 border-slate-700 text-slate-300"
+            }`}>
+              {a.tone !== "slate" && <AlertTriangle className="w-3 h-3 shrink-0" />}
+              {a.text}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -357,6 +459,19 @@ function ProjectPageContent() {
                   </div>
                 </CardBody>
               </Card>
+            )}
+
+            {/* Cockpit — santé, KPI live et alertes */}
+            {!isDev && (
+              <ProjectCockpit
+                project={project}
+                tasks={tasks ?? []}
+                milestones={milestones ?? []}
+                risks={risks ?? []}
+                uoLogs={uoLogs ?? []}
+                costs={costs ?? []}
+                isClient={isClient}
+              />
             )}
 
             {/* Modules — on attend que le rôle soit résolu */}
