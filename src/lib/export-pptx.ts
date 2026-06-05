@@ -1,4 +1,4 @@
-import type { Project, Task, Sprint, ProjectPhase, Milestone } from "@/types";
+import type { Project, Task, Sprint, ProjectPhase, Milestone, ProjectRisk, UoLog } from "@/types";
 
 interface ExportData {
   project: Project;
@@ -6,7 +6,55 @@ interface ExportData {
   sprints: Sprint[];
   phases: ProjectPhase[];
   milestones: Milestone[];
+  risks?: ProjectRisk[];
+  uoLogs?: UoLog[];
   memberCount: number;
+}
+
+// Synthèse chiffrée du projet, partagée par les slides exécutives
+function computeKpis(data: ExportData) {
+  const tasks   = data.tasks;
+  const active  = tasks.filter(t => t.status !== "cancelled");
+  const doneCount = tasks.filter(t => t.status === "done").length;
+  const lateCount = tasks.filter(isTaskLate).length;
+  const globalPct = active.length
+    ? Math.round(active.reduce((a, t) => a + (t.status === "done" ? 100 : (t.progress_pct ?? 0)), 0) / active.length)
+    : 0;
+
+  // Finance (basée sur les UO)
+  const unitCost    = data.project.uo_unit_cost ?? 0;
+  const uoAllocated = data.project.uo_value ?? 0;
+  const budgetUO    = uoAllocated * unitCost;
+  const logs        = data.uoLogs ?? [];
+  const consumedUO  = logs.reduce((s, l) => s + (l.uo_consumed ?? 0), 0);
+  const plannedUO   = logs.reduce((s, l) => s + (l.uo_planned  ?? 0), 0);
+  const costConsumed = consumedUO * unitCost;
+  // Budget de référence : budget UO si défini, sinon budget projet (€)
+  const budgetRef   = budgetUO > 0 ? budgetUO : (data.project.budget ?? 0);
+  const pctBudget   = budgetRef > 0 ? Math.round((costConsumed / budgetRef) * 100) : 0;
+  const remaining   = budgetRef - costConsumed;
+
+  // Jalons & risques
+  const msAchieved = data.milestones.filter(m => m.status === "achieved").length;
+  const msMissed   = data.milestones.filter(m => m.status === "missed").length;
+  const risksOpen  = (data.risks ?? []).filter(r => r.status === "open" || r.status === "occurred").length;
+
+  // Santé globale (vert / orange / rouge)
+  let health: { label: string; color: string };
+  if (lateCount > 0 || msMissed > 0 || (budgetRef > 0 && pctBudget > 100)) {
+    health = { label: "À risque", color: C.red };
+  } else if (risksOpen > 0 || (budgetRef > 0 && pctBudget > 85) || globalPct < 30) {
+    health = { label: "Sous surveillance", color: C.amber };
+  } else {
+    health = { label: "Sur la bonne voie", color: C.green };
+  }
+
+  return {
+    active, doneCount, lateCount, globalPct,
+    unitCost, uoAllocated, budgetUO, consumedUO, plannedUO, costConsumed,
+    budgetRef, pctBudget, remaining,
+    msAchieved, msMissed, risksOpen, health,
+  };
 }
 
 // Palette inspirée du template Babel (fond sombre + jaune)
@@ -145,7 +193,61 @@ export async function exportProjectToPptx(data: ExportData) {
     x: 0.9, y: 6.8, w: 9, h: 0.3, fontSize: 9, color: C.muted, italic: true, fontFace: "Century Gothic",
   });
 
-  // ── Slide 2 : Vue d'ensemble ───────────────────────────────────────────────
+  // ── Slide 2 : Synthèse exécutive ───────────────────────────────────────────
+  const k = computeKpis(data);
+  const exec = pptx.addSlide();
+  exec.background = { color: C.dark };
+  _addHeader(pptx, exec, "Synthèse exécutive", data.project.name);
+
+  // Bandeau santé du projet
+  exec.addShape(pptx.ShapeType.rect, { x: 0.4, y: 1.3, w: 12.5, h: 0.75, fill: { color: C.dark2 }, line: { color: C.border } });
+  exec.addShape(pptx.ShapeType.rect, { x: 0.4, y: 1.3, w: 0.12, h: 0.75, fill: { color: k.health.color }, line: { color: k.health.color } });
+  exec.addText([
+    { text: "État du projet : ", options: { color: C.muted, bold: false } },
+    { text: k.health.label, options: { color: k.health.color, bold: true } },
+  ], { x: 0.7, y: 1.3, w: 8, h: 0.75, fontSize: 18, fontFace: "Century Gothic", valign: "middle" });
+  exec.addText(`Statut : ${statusLabel(data.project.status)}  ·  Méthodologie : ${methodologyLabel(data.project.methodology_applied)}`, {
+    x: 8.5, y: 1.3, w: 4.3, h: 0.75, fontSize: 11, color: C.muted, align: "right", valign: "middle", fontFace: "Century Gothic",
+  });
+
+  // 4 KPI exécutifs
+  const execKpis = [
+    { label: "Avancement global", value: `${k.globalPct}%`, sub: `${k.doneCount}/${k.active.length} tâches terminées`, color: k.globalPct >= 80 ? C.green : k.globalPct >= 40 ? C.yellow : C.amber },
+    { label: "Budget consommé",   value: k.budgetRef > 0 ? `${k.pctBudget}%` : "—", sub: k.budgetRef > 0 ? `${fmtEuro(k.costConsumed)} / ${fmtEuro(k.budgetRef)}` : "Budget non défini", color: k.pctBudget > 100 ? C.red : k.pctBudget > 85 ? C.amber : C.green },
+    { label: "Tâches en retard",  value: String(k.lateCount), sub: k.lateCount > 0 ? "Action requise" : "Aucune", color: k.lateCount > 0 ? C.red : C.green },
+    { label: "Jalons atteints",   value: `${k.msAchieved}/${data.milestones.length}`, sub: k.msMissed > 0 ? `${k.msMissed} manqué(s)` : "Aucun manqué", color: k.msMissed > 0 ? C.red : C.green },
+  ];
+  execKpis.forEach((kp, i) => {
+    const x = 0.4 + i * 3.18;
+    exec.addShape(pptx.ShapeType.rect, { x, y: 2.3, w: 3, h: 1.5, fill: { color: C.dark2 }, line: { color: C.border } });
+    exec.addShape(pptx.ShapeType.rect, { x, y: 2.3, w: 0.08, h: 1.5, fill: { color: kp.color }, line: { color: kp.color } });
+    exec.addText(kp.label, { x: x + 0.2, y: 2.42, w: 2.7, h: 0.3, fontSize: 10, color: C.muted, fontFace: "Century Gothic" });
+    exec.addText(kp.value, { x: x + 0.2, y: 2.72, w: 2.7, h: 0.62, fontSize: 30, color: kp.color, bold: true, fontFace: "Century Gothic" });
+    exec.addText(kp.sub,   { x: x + 0.2, y: 3.42, w: 2.7, h: 0.3, fontSize: 9, color: C.muted, italic: true, fontFace: "Century Gothic" });
+  });
+
+  // Barres de progression : avancement & budget
+  const bars = [
+    { label: "Avancement des tâches", pct: k.globalPct, color: k.globalPct >= 80 ? C.green : C.yellow, y: 4.2 },
+    { label: "Consommation budget",   pct: k.budgetRef > 0 ? Math.min(100, k.pctBudget) : 0, color: k.pctBudget > 100 ? C.red : k.pctBudget > 85 ? C.amber : C.green, y: 5.1 },
+  ];
+  bars.forEach(b => {
+    exec.addText(`${b.label} — ${b.pct}%`, { x: 0.4, y: b.y, w: 12.5, h: 0.32, fontSize: 12, color: C.white, bold: true, fontFace: "Century Gothic" });
+    exec.addShape(pptx.ShapeType.rect, { x: 0.4, y: b.y + 0.38, w: 12.5, h: 0.24, fill: { color: C.dark2 }, line: { color: C.border } });
+    if (b.pct > 0) {
+      exec.addShape(pptx.ShapeType.rect, { x: 0.4, y: b.y + 0.38, w: 12.5 * (b.pct / 100), h: 0.24, fill: { color: b.color }, line: { color: b.color } });
+    }
+  });
+
+  // Ligne d'indicateurs secondaires
+  exec.addText([
+    { text: "Risques ouverts : ",  options: { color: C.muted } }, { text: `${k.risksOpen}    `, options: { color: k.risksOpen > 0 ? C.amber : C.white, bold: true } },
+    { text: "Sprints : ",          options: { color: C.muted } }, { text: `${data.sprints.length}    `, options: { color: C.white, bold: true } },
+    { text: "Phases : ",           options: { color: C.muted } }, { text: `${data.phases.length}    `, options: { color: C.white, bold: true } },
+    { text: "Équipe : ",           options: { color: C.muted } }, { text: `${data.memberCount} membre(s)`, options: { color: C.white, bold: true } },
+  ], { x: 0.4, y: 6.4, w: 12.5, h: 0.4, fontSize: 12, fontFace: "Century Gothic" });
+
+  // ── Slide 3 : Vue d'ensemble ───────────────────────────────────────────────
   const overview = pptx.addSlide();
   overview.background = { color: C.dark };
   _addHeader(pptx, overview, "Vue d'ensemble", data.project.name);
@@ -297,7 +399,90 @@ export async function exportProjectToPptx(data: ExportData) {
     }
   }
 
-  // ── Slide 4 : Classification des tâches ───────────────────────────────────
+  // ── Slide : Budget & Coûts (UO) ────────────────────────────────────────────
+  if (k.budgetRef > 0 || (data.uoLogs?.length ?? 0) > 0) {
+    const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+    const curYear = new Date().getFullYear();
+
+    const budgetSlide = pptx.addSlide();
+    budgetSlide.background = { color: C.dark };
+    _addHeader(pptx, budgetSlide, "Budget & Coûts — Suivi UO", data.project.name);
+
+    // KPI financiers
+    const finKpis = [
+      { label: "Budget alloué",     value: fmtEuro(k.budgetRef),     sub: k.uoAllocated > 0 ? `${k.uoAllocated} UO × ${fmtEuro(k.unitCost)}/UO` : "—", color: C.yellow },
+      { label: "Consommé à date",   value: fmtEuro(k.costConsumed),  sub: `${k.consumedUO.toFixed(1)} UO`, color: k.pctBudget > 100 ? C.red : C.amber },
+      { label: "Reste disponible",  value: fmtEuro(k.remaining),     sub: k.remaining < 0 ? "Dépassement" : "Disponible", color: k.remaining < 0 ? C.red : C.green },
+      { label: "% budget consommé", value: k.budgetRef > 0 ? `${k.pctBudget}%` : "—", sub: `Planifié : ${k.plannedUO.toFixed(1)} UO`, color: k.pctBudget > 100 ? C.red : k.pctBudget > 85 ? C.amber : C.green },
+    ];
+    finKpis.forEach((kp, i) => {
+      const x = 0.4 + i * 3.18;
+      budgetSlide.addShape(pptx.ShapeType.rect, { x, y: 1.3, w: 3, h: 1.45, fill: { color: C.dark2 }, line: { color: C.border } });
+      budgetSlide.addShape(pptx.ShapeType.rect, { x, y: 1.3, w: 0.08, h: 1.45, fill: { color: kp.color }, line: { color: kp.color } });
+      budgetSlide.addText(kp.label, { x: x + 0.2, y: 1.42, w: 2.7, h: 0.3, fontSize: 10, color: C.muted, fontFace: "Century Gothic" });
+      budgetSlide.addText(kp.value, { x: x + 0.2, y: 1.72, w: 2.7, h: 0.55, fontSize: 22, color: kp.color, bold: true, fontFace: "Century Gothic" });
+      budgetSlide.addText(kp.sub,   { x: x + 0.2, y: 2.34, w: 2.7, h: 0.3, fontSize: 9, color: C.muted, italic: true, fontFace: "Century Gothic" });
+    });
+
+    // Barre de consommation budget
+    const pctBar = k.budgetRef > 0 ? Math.min(100, k.pctBudget) : 0;
+    budgetSlide.addText(`Consommation du budget : ${k.pctBudget}%`, { x: 0.4, y: 2.95, w: 12.5, h: 0.32, fontSize: 12, color: C.white, bold: true, fontFace: "Century Gothic" });
+    budgetSlide.addShape(pptx.ShapeType.rect, { x: 0.4, y: 3.32, w: 12.5, h: 0.24, fill: { color: C.dark2 }, line: { color: C.border } });
+    if (pctBar > 0) {
+      budgetSlide.addShape(pptx.ShapeType.rect, { x: 0.4, y: 3.32, w: 12.5 * (pctBar / 100), h: 0.24, fill: { color: k.pctBudget > 100 ? C.red : k.pctBudget > 85 ? C.amber : C.green }, line: { color: C.border } });
+    }
+    if (k.pctBudget > 100) {
+      budgetSlide.addText("⚠ Dépassement budgétaire — arbitrage requis", { x: 0.4, y: 3.6, w: 12.5, h: 0.3, fontSize: 10, color: C.red, italic: true, fontFace: "Century Gothic" });
+    }
+
+    // Détail mensuel de l'année en cours
+    const yearLogs = (data.uoLogs ?? []).filter(l => l.year === curYear).sort((a, b) => a.month - b.month);
+    if (yearLogs.length > 0) {
+      budgetSlide.addText(`Détail mensuel ${curYear}`, { x: 0.4, y: 4.0, w: 6, h: 0.3, fontSize: 12, color: C.yellow, bold: true, fontFace: "Century Gothic" });
+      budgetSlide.addTable(
+        [
+          [
+            { text: "Mois",          options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
+            { text: "Planifié (UO)", options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
+            { text: "Consommé (UO)", options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
+            { text: "Écart",         options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
+            { text: "Coût (€ HT)",   options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
+          ],
+          ...yearLogs.map((l, ri) => {
+            const bg = ri % 2 === 0 ? C.dark2 : C.dark3;
+            const delta = l.uo_consumed - l.uo_planned;
+            return [
+              { text: MONTHS_FR[l.month - 1] ?? String(l.month), options: { color: C.white, bold: true, fill: { color: bg } } },
+              { text: l.uo_planned.toFixed(1),  options: { color: C.muted, fill: { color: bg } } },
+              { text: l.uo_consumed.toFixed(1), options: { color: C.white, fill: { color: bg } } },
+              { text: delta === 0 ? "—" : (delta > 0 ? `+${delta.toFixed(1)}` : delta.toFixed(1)), options: { color: delta > 0 ? C.red : delta < 0 ? C.green : C.muted, fill: { color: bg } } },
+              { text: fmtEuro(l.uo_consumed * k.unitCost), options: { color: C.amber, fill: { color: bg } } },
+            ];
+          }),
+          [
+            { text: `Total ${curYear}`, options: { bold: true, color: C.white, fill: { color: C.dark } } },
+            { text: yearLogs.reduce((s, l) => s + l.uo_planned, 0).toFixed(1),  options: { bold: true, color: C.muted, fill: { color: C.dark } } },
+            { text: yearLogs.reduce((s, l) => s + l.uo_consumed, 0).toFixed(1), options: { bold: true, color: C.white, fill: { color: C.dark } } },
+            { text: "",                 options: { fill: { color: C.dark } } },
+            { text: fmtEuro(yearLogs.reduce((s, l) => s + l.uo_consumed, 0) * k.unitCost), options: { bold: true, color: C.amber, fill: { color: C.dark } } },
+          ],
+        ],
+        {
+          x: 0.4, y: 4.35, w: 12.5, h: 2.5,
+          fontSize: 10, rowH: 0.3,
+          fontFace: "Century Gothic",
+          colW: [3.3, 2.3, 2.3, 2.0, 2.6],
+          border: { type: "solid", color: C.border, pt: 0.5 },
+        }
+      );
+    } else {
+      budgetSlide.addText("Aucune saisie de consommation UO pour l'année en cours.", {
+        x: 0.4, y: 4.2, w: 12.5, h: 0.4, fontSize: 11, color: C.muted, italic: true, fontFace: "Century Gothic",
+      });
+    }
+  }
+
+  // ── Slide : Classification des tâches ──────────────────────────────────────
   if (data.tasks.length > 0) {
     const tasksSlide = pptx.addSlide();
     tasksSlide.background = { color: C.dark };
