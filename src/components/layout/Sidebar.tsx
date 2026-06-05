@@ -75,17 +75,12 @@ export default function Sidebar() {
   const [loggingOut, setLoggingOut] = useState(false);
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  async function handleLogout() {
+  function handleLogout() {
     setLoggingOut(true);
-    try {
-      await supabase.auth.signOut();
-      // onAuthStateChange(SIGNED_OUT) se charge de reset() + qc.clear()
-      // On force la navigation immédiatement sans attendre
-      window.location.replace("/login/");
-    } catch {
-      toast.error("Erreur lors de la déconnexion");
-      setLoggingOut(false);
-    }
+    // Fire & forget : ne pas attendre signOut pour rediriger
+    // (signOut peut bloquer sur réseau lent ; onAuthStateChange nettoie le cache)
+    supabase.auth.signOut().catch(() => {});
+    window.location.replace("/login/");
   }
 
   return (
