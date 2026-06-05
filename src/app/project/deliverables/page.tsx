@@ -102,8 +102,21 @@ function DeliverablesContent() {
   const { data: memberships = [] } = useMyMemberships();
   const myRole = memberships.find(m => m.project_id === id)?.role ?? null;
   const isReadOnly = myRole === "client" || myRole === "observer";
+  // Le client peut valider/refuser un livrable soumis (sign-off), sans pouvoir l'éditer.
+  const canValidate = myRole === "client";
+  const updateDeliverable = useUpdateDeliverable();
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem]   = useState<Deliverable | undefined>();
+
+  async function decide(d: Deliverable, decision: "approved" | "rejected") {
+    if (!id) return;
+    await updateDeliverable.mutateAsync({
+      id: d.id, project_id: id,
+      status: decision,
+      reviewed_by: user?.id ?? null,
+      reviewed_at: new Date().toISOString(),
+    });
+  }
 
   const byStatus = (s: string) => deliverables.filter(d => d.status === s);
   const total     = deliverables.length;
@@ -164,6 +177,33 @@ function DeliverablesContent() {
                                 className="text-xs text-indigo-400 hover:text-indigo-300 mt-1 inline-block">
                                 Ouvrir le document →
                               </a>
+                            )}
+
+                            {/* Tampon de revue */}
+                            {d.reviewed_at && (d.status === "approved" || d.status === "rejected") && (
+                              <p className={`text-xs mt-2 ${d.status === "approved" ? "text-green-500/80" : "text-red-400/80"}`}>
+                                {d.status === "approved" ? "✓ Validé" : "✗ Refusé"} le {new Date(d.reviewed_at).toLocaleDateString("fr-FR")}
+                              </p>
+                            )}
+
+                            {/* Validation client (sign-off) — uniquement sur les livrables soumis */}
+                            {canValidate && d.status === "submitted" && (
+                              <div className="flex gap-2 mt-3" onClick={e => e.stopPropagation()}>
+                                <button
+                                  onClick={() => decide(d, "approved")}
+                                  disabled={updateDeliverable.isPending}
+                                  className="flex-1 px-2 py-1.5 rounded-lg text-xs font-medium bg-green-600/20 text-green-400 border border-green-700/40 hover:bg-green-600/30 transition-colors disabled:opacity-50"
+                                >
+                                  ✓ Valider
+                                </button>
+                                <button
+                                  onClick={() => decide(d, "rejected")}
+                                  disabled={updateDeliverable.isPending}
+                                  className="flex-1 px-2 py-1.5 rounded-lg text-xs font-medium bg-red-600/20 text-red-400 border border-red-700/40 hover:bg-red-600/30 transition-colors disabled:opacity-50"
+                                >
+                                  ✗ Refuser
+                                </button>
+                              </div>
                             )}
                           </CardBody>
                         </Card>
