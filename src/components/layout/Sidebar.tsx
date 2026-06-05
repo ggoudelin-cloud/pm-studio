@@ -4,12 +4,13 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, FolderKanban, Settings, LogOut,
-  ChevronRight, Layers, Bell,
+  ChevronRight, Layers, Bell, ArrowLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
-import { useNotifications, useMarkNotificationRead } from "@/hooks/useProjects";
+import { useNotifications, useMarkNotificationRead, useMyMemberships, useProject } from "@/hooks/useProjects";
+import { getProjectModules, MODULE_GROUP_ORDER } from "@/lib/project-modules";
 import { useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { useState, useRef, useEffect } from "react";
@@ -18,6 +19,70 @@ const navItems = [
   { href: "/dashboard/",  label: "Tableau de bord", icon: LayoutDashboard },
   { href: "/projects/",   label: "Projets",          icon: FolderKanban },
 ];
+
+// Normalise un chemin (sans query ni slash final) pour comparer route active
+function routeOf(href: string) {
+  return href.split("?")[0].replace(/\/$/, "");
+}
+
+// ── Navigation contextuelle quand on est à l'intérieur d'un projet ───────────
+function ProjectContextNav({ projectId, pathname }: { projectId: string; pathname: string }) {
+  const { data: memberships = [] } = useMyMemberships();
+  const { data: project } = useProject(projectId);
+  const role = memberships.find(m => m.project_id === projectId)?.role ?? null;
+  const modules = getProjectModules(projectId, role);
+  const currentRoute = routeOf(pathname);
+
+  // Regroupement par section (les modules sans groupe restent dans "" )
+  const groups = modules.reduce<Record<string, typeof modules>>((acc, m) => {
+    const g = m.group ?? "";
+    (acc[g] ??= []).push(m);
+    return acc;
+  }, {});
+  const orderedGroups = Object.keys(groups).sort(
+    (a, b) => MODULE_GROUP_ORDER.indexOf(a) - MODULE_GROUP_ORDER.indexOf(b)
+  );
+
+  return (
+    <div className="mt-3 pt-3 border-t border-slate-800">
+      <Link
+        href={`/project/?id=${projectId}`}
+        className="flex items-center gap-2 px-3 py-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+      >
+        <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
+        <span className="truncate">{project?.name ?? "Projet"}</span>
+      </Link>
+
+      {orderedGroups.map(group => (
+        <div key={group} className="mt-2">
+          {group && (
+            <p className="px-3 py-1 text-[10px] font-semibold text-slate-600 uppercase tracking-wider">{group}</p>
+          )}
+          <div className="space-y-0.5">
+            {groups[group].map(({ href, label, icon: Icon }) => {
+              const active = currentRoute === routeOf(href);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] transition-colors",
+                    active
+                      ? "bg-indigo-600/10 text-indigo-400 font-medium"
+                      : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                  )}
+                >
+                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate flex-1">{label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function NotificationPanel({ onClose }: { onClose: () => void }) {
   const { data: notifications = [] } = useNotifications();
@@ -75,6 +140,15 @@ export default function Sidebar() {
   const [loggingOut, setLoggingOut] = useState(false);
   const unreadCount = notifications.filter(n => !n.read).length;
 
+  // Projet courant déduit de l'URL (?id=) — pour la navigation contextuelle.
+  // Lu côté client (pas de useSearchParams pour ne pas imposer de Suspense ici).
+  const [projectId, setProjectId] = useState<string | null>(null);
+  useEffect(() => {
+    const inProject = pathname === "/project" || pathname.startsWith("/project/");
+    if (!inProject || typeof window === "undefined") { setProjectId(null); return; }
+    setProjectId(new URLSearchParams(window.location.search).get("id"));
+  }, [pathname]);
+
   function handleLogout() {
     setLoggingOut(true);
     // Fire & forget : ne pas attendre signOut pour rediriger
@@ -99,7 +173,7 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = pathname.startsWith(item.href);
@@ -120,6 +194,9 @@ export default function Sidebar() {
             </Link>
           );
         })}
+
+        {/* Navigation contextuelle du projet courant */}
+        {projectId && <ProjectContextNav projectId={projectId} pathname={pathname} />}
       </nav>
 
       {/* Footer utilisateur */}
