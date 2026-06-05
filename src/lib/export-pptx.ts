@@ -1,4 +1,5 @@
-import type { Project, Task, Sprint, ProjectPhase, Milestone, ProjectRisk, UoLog } from "@/types";
+import type { Project, Task, Sprint, ProjectPhase, Milestone, ProjectRisk, UoLog, ProjectCost } from "@/types";
+import { computeProjectKpis, isTaskLate } from "./project-kpis";
 
 interface ExportData {
   project: Project;
@@ -8,52 +9,41 @@ interface ExportData {
   milestones: Milestone[];
   risks?: ProjectRisk[];
   uoLogs?: UoLog[];
+  costs?: ProjectCost[];
   memberCount: number;
 }
 
-// Synthèse chiffrée du projet, partagée par les slides exécutives
+// Synthèse chiffrée du projet, partagée par les slides exécutives.
+// Délègue à la couche KPI unique (lib/project-kpis) puis adapte les noms de
+// champs attendus par les slides et associe une couleur de la palette à la santé.
 function computeKpis(data: ExportData) {
-  const tasks   = data.tasks;
-  const active  = tasks.filter(t => t.status !== "cancelled");
-  const doneCount = tasks.filter(t => t.status === "done").length;
-  const lateCount = tasks.filter(isTaskLate).length;
-  const globalPct = active.length
-    ? Math.round(active.reduce((a, t) => a + (t.status === "done" ? 100 : (t.progress_pct ?? 0)), 0) / active.length)
-    : 0;
-
-  // Finance (basée sur les UO)
-  const unitCost    = data.project.uo_unit_cost ?? 0;
-  const uoAllocated = data.project.uo_value ?? 0;
-  const budgetUO    = uoAllocated * unitCost;
-  const logs        = data.uoLogs ?? [];
-  const consumedUO  = logs.reduce((s, l) => s + (l.uo_consumed ?? 0), 0);
-  const plannedUO   = logs.reduce((s, l) => s + (l.uo_planned  ?? 0), 0);
-  const costConsumed = consumedUO * unitCost;
-  // Budget de référence : budget UO si défini, sinon budget projet (€)
-  const budgetRef   = budgetUO > 0 ? budgetUO : (data.project.budget ?? 0);
-  const pctBudget   = budgetRef > 0 ? Math.round((costConsumed / budgetRef) * 100) : 0;
-  const remaining   = budgetRef - costConsumed;
-
-  // Jalons & risques
-  const msAchieved = data.milestones.filter(m => m.status === "achieved").length;
-  const msMissed   = data.milestones.filter(m => m.status === "missed").length;
-  const risksOpen  = (data.risks ?? []).filter(r => r.status === "open" || r.status === "occurred").length;
-
-  // Santé globale (vert / orange / rouge)
-  let health: { label: string; color: string };
-  if (lateCount > 0 || msMissed > 0 || (budgetRef > 0 && pctBudget > 100)) {
-    health = { label: "À risque", color: C.red };
-  } else if (risksOpen > 0 || (budgetRef > 0 && pctBudget > 85) || globalPct < 30) {
-    health = { label: "Sous surveillance", color: C.amber };
-  } else {
-    health = { label: "Sur la bonne voie", color: C.green };
-  }
-
+  const k = computeProjectKpis({
+    project:    data.project,
+    tasks:      data.tasks,
+    milestones: data.milestones,
+    risks:      data.risks,
+    uoLogs:     data.uoLogs,
+    costs:      data.costs,
+  });
+  const healthColor = k.health.level === "red" ? C.red : k.health.level === "amber" ? C.amber : C.green;
   return {
-    active, doneCount, lateCount, globalPct,
-    unitCost, uoAllocated, budgetUO, consumedUO, plannedUO, costConsumed,
-    budgetRef, pctBudget, remaining,
-    msAchieved, msMissed, risksOpen, health,
+    active:       data.tasks.filter(t => t.status !== "cancelled"),
+    doneCount:    k.taskDone,
+    lateCount:    k.taskLate,
+    globalPct:    k.progressPct,
+    unitCost:     k.unitCost,
+    uoAllocated:  k.uoAllocated,
+    budgetUO:     k.budgetUO,
+    consumedUO:   k.consumedUO,
+    plannedUO:    k.plannedUO,
+    costConsumed: k.consumed,
+    budgetRef:    k.budgetRef,
+    pctBudget:    k.pctBudget,
+    remaining:    k.remaining,
+    msAchieved:   k.msAchieved,
+    msMissed:     k.msMissed,
+    risksOpen:    k.risksOpen,
+    health:       { label: k.health.label, color: healthColor },
   };
 }
 
@@ -92,25 +82,6 @@ function taskStatusLabel(s: string | null | undefined) {
     blocked: "Bloqué", done: "Terminé", cancelled: "Annulé",
   };
   return map[s ?? ""] ?? s ?? "—";
-}
-
-// Détecte un retard de planning : avancement réel inférieur à l'avancement
-// attendu à la date du jour (start → due). Cohérent avec l'affichage du Gantt.
-function isTaskLate(t: Task): boolean {
-  if (t.status === "done" || t.status === "cancelled") return false;
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const start = t.start_date ? new Date(t.start_date) : null;
-  const end   = t.due_date   ? new Date(t.due_date)   : null;
-  if (!start || !end) {
-    // Sans dates de cadrage : en retard si l'échéance est dépassée et la tâche non finie
-    return !!end && end < today;
-  }
-  if (today <= start) return false;
-  const total = end.getTime() - start.getTime();
-  const expected = total > 0
-    ? Math.min(100, Math.max(0, ((today.getTime() - start.getTime()) / total) * 100))
-    : 100;
-  return (t.progress_pct ?? 0) < expected - 1;
 }
 
 function fmtDate(d: string | null | undefined) {

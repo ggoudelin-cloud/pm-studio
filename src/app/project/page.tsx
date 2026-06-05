@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
   useProject, useUpdateProject, useProjectMembers, useTasks,
   useSprints, usePhases, useMilestones, useMyMemberships,
-  useProjectRisks, useUoLogs,
+  useProjectRisks, useUoLogs, useProjectCosts,
 } from "@/hooks/useProjects";
 import { useAuthStore } from "@/stores/auth";
 import { useQueryClient } from "@tanstack/react-query";
@@ -248,6 +248,7 @@ function ProjectPageContent() {
   const { data: milestones } = useMilestones(id);
   const { data: risks }      = useProjectRisks(id);
   const { data: uoLogs }     = useUoLogs(id);
+  const { data: costs }      = useProjectCosts(id);
   // Rôle dérivé depuis useMyMemberships (déjà en cache, pas de requête supplémentaire)
   const { data: memberships = [] } = useMyMemberships();
   const myRole = memberships.find(m => m.project_id === id)?.role ?? null;
@@ -275,6 +276,7 @@ function ProjectPageContent() {
         milestones:  milestones ?? [],
         risks:       risks ?? [],
         uoLogs:      uoLogs ?? [],
+        costs:       costs ?? [],
         memberCount: members?.length ?? 0,
       });
     } finally {

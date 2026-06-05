@@ -4,7 +4,9 @@ import Link from "next/link";
 import {
   useProjects, useMyMemberships, useTasks, useProjectCosts,
   useMilestones, useAllUoLogs, useMyTaskProjectIds,
+  useProjectRisks, useUoLogs,
 } from "@/hooks/useProjects";
+import { computeProjectKpis } from "@/lib/project-kpis";
 import { useAuthStore } from "@/stores/auth";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
@@ -30,12 +32,15 @@ function ExecutiveProjectCard({ project }: { project: Project }) {
   const { data: tasks      = [] } = useTasks(project.id);
   const { data: costs      = [] } = useProjectCosts(project.id);
   const { data: milestones = [] } = useMilestones(project.id);
+  const { data: risks      = [] } = useProjectRisks(project.id);
+  const { data: uoLogs     = [] } = useUoLogs(project.id);
 
+  // Source de vérité unique (avancement / coût / santé) — cohérent avec reporting & export
+  const kpis = computeProjectKpis({ project, tasks, costs, milestones, risks, uoLogs });
   const total    = tasks.length;
-  const done     = tasks.filter(t => t.status === "done").length;
-  const progress = total > 0 ? Math.round((done / total) * 100) : 0;
-  const totalHT  = costs.reduce((s, c) => s + c.quantity * c.unit_cost_ht, 0);
-  const budgetPct = project.budget && project.budget > 0 ? Math.min(100, Math.round((totalHT / project.budget) * 100)) : null;
+  const done     = kpis.taskDone;
+  const progress = kpis.progressPct;
+  const budgetPct = kpis.hasBudget ? Math.min(100, kpis.pctBudget) : null;
 
   const today = new Date().toISOString().slice(0, 10);
   const nextMilestone = milestones
@@ -62,11 +67,21 @@ function ExecutiveProjectCard({ project }: { project: Project }) {
               )}
             </div>
           </div>
-          <span className={`text-xs font-medium shrink-0 px-2 py-0.5 rounded-full ${
-            project.status === "active" ? "bg-green-900/30 text-green-400" :
-            project.status === "paused" ? "bg-amber-900/30 text-amber-400" :
-            "bg-slate-800 text-slate-400"
-          }`}>{getStatusLabel(project.status)}</span>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+              project.status === "active" ? "bg-green-900/30 text-green-400" :
+              project.status === "paused" ? "bg-amber-900/30 text-amber-400" :
+              "bg-slate-800 text-slate-400"
+            }`}>{getStatusLabel(project.status)}</span>
+            <span className={`flex items-center gap-1 text-xs font-medium ${
+              kpis.health.level === "red" ? "text-red-400" : kpis.health.level === "amber" ? "text-amber-400" : "text-green-400"
+            }`} title="Santé du projet">
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                kpis.health.level === "red" ? "bg-red-400" : kpis.health.level === "amber" ? "bg-amber-400" : "bg-green-400"
+              }`} />
+              {kpis.health.label}
+            </span>
+          </div>
         </div>
 
         <div className="space-y-1.5">
