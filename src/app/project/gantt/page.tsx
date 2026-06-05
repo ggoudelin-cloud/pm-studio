@@ -290,7 +290,6 @@ function GanttContent() {
   const update       = useUpdateTask();
   const updateSilent = useUpdateTaskSilent();
 
-  const [offsetDays, setOffsetDays] = useState(0);
   const [editTask,   setEditTask]   = useState<Task | null>(null);
   const [depTask,    setDepTask]    = useState<Task | null>(null);
   const timelineRef    = useRef<HTMLDivElement>(null);
@@ -302,6 +301,7 @@ function GanttContent() {
   const depsRef        = useRef(deps);
   depsRef.current      = deps;
   const justDraggedRef = useRef(false);
+  const didInitScroll  = useRef(false);
 
   // Synchronisation scroll vertical gauche ↔ droite
   function syncLeft() {
@@ -418,7 +418,21 @@ function GanttContent() {
     return d;
   }, []);
 
-  const viewStart = useMemo(() => addDays(today, offsetDays - 7), [today, offsetDays]);
+  // Décalage (en jours par rapport à aujourd'hui) de la tâche/jalon la plus ancienne,
+  // pour que viewStart couvre aussi le passé et que le scroll puisse remonter.
+  const earliestOffset = useMemo(() => {
+    let min = -7; // au moins 7 jours avant aujourd'hui
+    tasks.forEach(t => {
+      const d = (t as Task & { start_date?: string }).start_date ?? t.due_date;
+      if (d) { const diff = diffDays(today, new Date(d)); if (diff < min) min = diff; }
+    });
+    milestones.forEach(m => {
+      if (m.due_date) { const diff = diffDays(today, new Date(m.due_date)); if (diff < min) min = diff; }
+    });
+    return min - 3; // 3 jours de marge avant la plus ancienne
+  }, [tasks, milestones, today]);
+
+  const viewStart = useMemo(() => addDays(today, earliestOffset), [today, earliestOffset]);
 
   // Nombre de jours dynamique : couvre toutes les barres + 30 jours de marge
   const VISIBLE_DAYS = useMemo(() => {
@@ -440,6 +454,24 @@ function GanttContent() {
   }, [tasks, milestones, viewStart]);
 
   const days = useMemo(() => Array.from({ length: VISIBLE_DAYS }, (_, i) => addDays(viewStart, i)), [viewStart, VISIBLE_DAYS]);
+
+  // Positionne le scroll horizontal pour amener « aujourd'hui » près du bord gauche
+  function scrollToToday(smooth = true) {
+    if (!timelineRef.current) return;
+    const x = diffDays(viewStart, today) * DAY_W;
+    timelineRef.current.scrollTo({ left: Math.max(0, x - 7 * DAY_W), behavior: smooth ? "smooth" : "auto" });
+  }
+  function scrollBy(deltaDays: number) {
+    timelineRef.current?.scrollBy({ left: deltaDays * DAY_W, behavior: "smooth" });
+  }
+
+  // Ouverture : se cale sur aujourd'hui tout en laissant remonter le passé au scroll
+  useEffect(() => {
+    if (didInitScroll.current || isLoading || tasks.length === 0 || !timelineRef.current) return;
+    didInitScroll.current = true;
+    scrollToToday(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, tasks.length, viewStart]);
 
   // Group days by month for header
   const months = useMemo(() => {
@@ -493,9 +525,9 @@ function GanttContent() {
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="secondary" size="sm" onClick={() => setOffsetDays(d => d - 14)}><ChevronLeft className="w-4 h-4" /></Button>
-            <Button variant="secondary" size="sm" onClick={() => setOffsetDays(0)}>Aujourd&apos;hui</Button>
-            <Button variant="secondary" size="sm" onClick={() => setOffsetDays(d => d + 14)}><ChevronRight className="w-4 h-4" /></Button>
+            <Button variant="secondary" size="sm" onClick={() => scrollBy(-14)}><ChevronLeft className="w-4 h-4" /></Button>
+            <Button variant="secondary" size="sm" onClick={() => scrollToToday()}>Aujourd&apos;hui</Button>
+            <Button variant="secondary" size="sm" onClick={() => scrollBy(14)}><ChevronRight className="w-4 h-4" /></Button>
           </div>
         </div>
 
