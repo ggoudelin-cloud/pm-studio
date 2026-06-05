@@ -47,12 +47,25 @@ function ProjectContextNav({ projectId, pathname }: { projectId: string; pathnam
 
   return (
     <div className="mt-3 pt-3 border-t border-slate-800">
+      {/* Retour à la liste des projets */}
       <Link
-        href={`/project/?id=${projectId}`}
+        href="/projects/"
         className="flex items-center gap-2 px-3 py-1.5 text-xs text-slate-500 hover:text-slate-300 transition-colors"
       >
         <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
-        <span className="truncate">{project?.name ?? "Projet"}</span>
+        <span className="truncate">Tous les projets</span>
+      </Link>
+      {/* Nom du projet → accueil / cockpit du projet */}
+      <Link
+        href={`/project/?id=${projectId}`}
+        className={cn(
+          "block px-3 py-1 text-sm font-semibold truncate transition-colors",
+          routeOf(pathname) === "/project"
+            ? "text-indigo-400"
+            : "text-slate-200 hover:text-white"
+        )}
+      >
+        {project?.name ?? "Projet"}
       </Link>
 
       {orderedGroups.map(group => (
