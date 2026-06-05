@@ -580,6 +580,19 @@ export function useMarkNotificationRead() {
   });
 }
 
+export function useMarkAllNotificationsRead() {
+  const qc = useQueryClient();
+  const { user } = useAuthStore();
+  return useMutation({
+    mutationFn: async () => {
+      if (!user) return;
+      const { error } = await DB().from("notifications").update({ read: true }).eq("user_id", user.id).eq("read", false);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["notifications"] }); },
+  });
+}
+
 // ── Team / Members ────────────────────────────────────────────────────────────
 export function useMyMemberships() {
   const { user } = useAuthStore();

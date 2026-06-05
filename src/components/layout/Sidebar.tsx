@@ -4,13 +4,14 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, FolderKanban, Settings, LogOut,
-  ChevronRight, Layers, Bell, ArrowLeft,
+  ChevronRight, Layers, Bell, ArrowLeft, Inbox,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
-import { useNotifications, useMarkNotificationRead, useMyMemberships, useProject } from "@/hooks/useProjects";
+import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead, useMyMemberships, useProject } from "@/hooks/useProjects";
 import { getProjectModules, MODULE_GROUP_ORDER } from "@/lib/project-modules";
+import { notifStyle } from "@/lib/notifications";
 import { useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { useState, useRef, useEffect } from "react";
@@ -18,6 +19,7 @@ import { useState, useRef, useEffect } from "react";
 const navItems = [
   { href: "/dashboard/",  label: "Tableau de bord", icon: LayoutDashboard },
   { href: "/projects/",   label: "Projets",          icon: FolderKanban },
+  { href: "/actions/",    label: "Mes actions",      icon: Inbox },
 ];
 
 // Normalise un chemin (sans query ni slash final) pour comparer route active
@@ -87,7 +89,10 @@ function ProjectContextNav({ projectId, pathname }: { projectId: string; pathnam
 function NotificationPanel({ onClose }: { onClose: () => void }) {
   const { data: notifications = [] } = useNotifications();
   const markRead = useMarkNotificationRead();
+  const markAll  = useMarkAllNotificationsRead();
+  const router = useRouter();
   const ref = useRef<HTMLDivElement>(null);
+  const unread = notifications.filter(n => !n.read).length;
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -97,35 +102,52 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
     return () => document.removeEventListener("mousedown", handler);
   }, [onClose]);
 
+  function open(n: { id: string; link: string | null }) {
+    markRead.mutate(n.id);
+    if (n.link) { router.push(n.link); onClose(); }
+  }
+
   return (
-    <div ref={ref} className="absolute bottom-16 left-full ml-2 w-72 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden">
+    <div ref={ref} className="absolute bottom-16 left-full ml-2 w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden">
       <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-white">Notifications</h3>
-        <span className="text-xs text-slate-500">{notifications.filter(n => !n.read).length} non lues</span>
+        {unread > 0
+          ? <button onClick={() => markAll.mutate()} className="text-xs text-indigo-400 hover:text-indigo-300">Tout lire ({unread})</button>
+          : <span className="text-xs text-slate-500">à jour</span>}
       </div>
       <div className="max-h-72 overflow-y-auto">
         {notifications.length === 0 ? (
           <p className="px-4 py-6 text-sm text-slate-500 text-center">Aucune notification</p>
         ) : (
-          notifications.map(n => (
-            <div
-              key={n.id}
-              onClick={() => markRead.mutate(n.id)}
-              className={cn("px-4 py-3 border-b border-slate-800/50 cursor-pointer hover:bg-slate-800/40 transition-colors",
-                !n.read && "bg-indigo-950/20")}
-            >
-              <div className="flex items-start gap-2">
-                {!n.read && <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full mt-1.5 shrink-0" />}
-                <div className={cn("flex-1", n.read && "pl-3.5")}>
-                  <p className="text-xs font-medium text-slate-200">{n.title}</p>
-                  {n.message && <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>}
-                  <p className="text-xs text-slate-600 mt-1">{new Date(n.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
+          notifications.map(n => {
+            const { icon: Icon, color } = notifStyle(n.type);
+            return (
+              <div
+                key={n.id}
+                onClick={() => open(n)}
+                className={cn("px-4 py-3 border-b border-slate-800/50 cursor-pointer hover:bg-slate-800/40 transition-colors",
+                  !n.read && "bg-indigo-950/20")}
+              >
+                <div className="flex items-start gap-2.5">
+                  <Icon className={cn("w-4 h-4 mt-0.5 shrink-0", color)} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-slate-200 flex items-center gap-1.5">
+                      {!n.read && <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full shrink-0" />}
+                      {n.title}
+                    </p>
+                    {n.message && <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>}
+                    <p className="text-xs text-slate-600 mt-1">{new Date(n.created_at).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
+      <Link href="/actions/" onClick={onClose}
+        className="block px-4 py-2.5 text-center text-xs text-indigo-400 hover:bg-slate-800/50 border-t border-slate-800">
+        Voir toutes mes actions →
+      </Link>
     </div>
   );
 }
