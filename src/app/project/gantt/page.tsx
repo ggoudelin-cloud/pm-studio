@@ -604,20 +604,32 @@ function GanttContent() {
                         {days.map((d, i) => (d.getDay() === 0 || d.getDay() === 6) ? (
                           <div key={i} style={{ position: "absolute", left: i * DAY_W, width: DAY_W, top: 0, bottom: 0, background: "rgba(15,23,42,0.4)" }} />
                         ) : null)}
-                        {bar && (
+                        {bar && (() => {
+                          const pct = task.status === "done" ? 100 : (task.progress_pct ?? 0);
+                          return (
                           <div
                             style={{ position: "absolute", left: bar.x, width: bar.w, height: 24, borderRadius: 4, zIndex: 2, cursor: "grab" }}
-                            className={`${METH_COLORS[task.methodology_recommendation ?? ""] ?? "bg-slate-600"} ${isDragging ? "opacity-100 ring-2 ring-white/40" : "opacity-80 hover:opacity-100"} transition-opacity flex items-center relative`}
+                            className={`${METH_COLORS[task.methodology_recommendation ?? ""] ?? "bg-slate-600"} ${isDragging ? "opacity-100 ring-2 ring-white/40" : "opacity-80 hover:opacity-100"} transition-opacity flex items-center relative overflow-hidden`}
                             onClick={() => { if (justDraggedRef.current) { justDraggedRef.current = false; return; } setEditTask(task); }}
-                            title={`${task.title}${isDragging ? ` · ${effStart} → ${effEnd}` : ""}`}
+                            title={`${task.title} · avancement ${pct}%${isDragging ? ` · ${effStart} → ${effEnd}` : ""}`}
                           >
+                            {/* Remplissage d'avancement (portion réalisée à date) */}
+                            {pct > 0 && (
+                              <div
+                                style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${pct}%`, borderRadius: pct >= 100 ? 4 : "4px 0 0 4px", zIndex: 1 }}
+                                className={`pointer-events-none transition-all ${pct >= 100 ? "bg-green-600/70" : "bg-black/40"}`}
+                              />
+                            )}
                             {/* Poignée gauche (redimensionnement) */}
                             <div
                               style={{ position: "absolute", left: 0, top: 0, width: 8, height: "100%", cursor: "ew-resize", zIndex: 3, borderRadius: "4px 0 0 4px" }}
                               className="hover:bg-white/25 transition-colors"
                               onMouseDown={(ev) => { ev.stopPropagation(); ev.preventDefault(); startResize(task, "left", ev.clientX); }}
                             />
-                            <span className="text-white text-[10px] truncate font-medium px-3 pointer-events-none flex-1">{task.title}</span>
+                            <span className="text-white text-[10px] truncate font-medium px-3 pointer-events-none flex-1 relative z-[2]">{task.title}</span>
+                            {pct > 0 && (
+                              <span className="text-white/95 text-[9px] font-bold pr-2.5 pointer-events-none relative z-[2] shrink-0">{pct}%</span>
+                            )}
                             {/* Poignée droite (redimensionnement) */}
                             <div
                               style={{ position: "absolute", right: 0, top: 0, width: 8, height: "100%", cursor: "ew-resize", zIndex: 3, borderRadius: "0 4px 4px 0" }}
@@ -625,7 +637,8 @@ function GanttContent() {
                               onMouseDown={(ev) => { ev.stopPropagation(); ev.preventDefault(); startResize(task, "right", ev.clientX); }}
                             />
                           </div>
-                        )}
+                          );
+                        })()}
                       </div>
                     );
                   })}
