@@ -393,6 +393,21 @@ function TasksPageContent() {
                         )}
                       </div>
 
+                      {/* Avancement (mis à jour par les devs depuis « Mes tâches ») */}
+                      {(() => {
+                        const pct = task.progress_pct ?? 0;
+                        const barColor = pct === 100 ? "bg-green-500" : pct >= 50 ? "bg-indigo-500" : pct > 0 ? "bg-amber-500" : "bg-slate-600";
+                        const txtColor = pct === 100 ? "text-green-400" : pct > 0 ? "text-slate-300" : "text-slate-500";
+                        return (
+                          <div className="mt-2 flex items-center gap-2">
+                            <div className="w-32 bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                              <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className={`text-xs font-medium ${txtColor}`}>{pct} %</span>
+                          </div>
+                        );
+                      })()}
+
                       {task.decision_score_v !== null && (
                         <div className="mt-2 flex items-center gap-3">
                           <div className="flex gap-1 h-1.5 rounded-full overflow-hidden w-24">
