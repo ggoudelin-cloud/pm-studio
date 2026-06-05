@@ -38,6 +38,33 @@ function statusLabel(s: string | null | undefined) {
   return map[s ?? ""] ?? s ?? "—";
 }
 
+function taskStatusLabel(s: string | null | undefined) {
+  const map: Record<string, string> = {
+    todo: "À faire", in_progress: "En cours", review: "En révision",
+    blocked: "Bloqué", done: "Terminé", cancelled: "Annulé",
+  };
+  return map[s ?? ""] ?? s ?? "—";
+}
+
+// Détecte un retard de planning : avancement réel inférieur à l'avancement
+// attendu à la date du jour (start → due). Cohérent avec l'affichage du Gantt.
+function isTaskLate(t: Task): boolean {
+  if (t.status === "done" || t.status === "cancelled") return false;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const start = t.start_date ? new Date(t.start_date) : null;
+  const end   = t.due_date   ? new Date(t.due_date)   : null;
+  if (!start || !end) {
+    // Sans dates de cadrage : en retard si l'échéance est dépassée et la tâche non finie
+    return !!end && end < today;
+  }
+  if (today <= start) return false;
+  const total = end.getTime() - start.getTime();
+  const expected = total > 0
+    ? Math.min(100, Math.max(0, ((today.getTime() - start.getTime()) / total) * 100))
+    : 100;
+  return (t.progress_pct ?? 0) < expected - 1;
+}
+
 function fmtDate(d: string | null | undefined) {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
@@ -185,7 +212,92 @@ export async function exportProjectToPptx(data: ExportData) {
     });
   });
 
-  // ── Slide 3 : Classification des tâches ───────────────────────────────────
+  // ── Slide 3 : Avancement des tâches (vision exécutive) ─────────────────────
+  if (data.tasks.length > 0) {
+    const progSlide = pptx.addSlide();
+    progSlide.background = { color: C.dark };
+    _addHeader(pptx, progSlide, "Avancement des tâches", data.project.name);
+
+    const active     = data.tasks.filter(t => t.status !== "cancelled");
+    const doneCount  = data.tasks.filter(t => t.status === "done").length;
+    const inProgress = data.tasks.filter(t => t.status !== "done" && t.status !== "cancelled" && (t.progress_pct ?? 0) > 0).length;
+    const lateCount  = data.tasks.filter(isTaskLate).length;
+    const globalPct  = active.length
+      ? Math.round(active.reduce((a, t) => a + (t.status === "done" ? 100 : (t.progress_pct ?? 0)), 0) / active.length)
+      : 0;
+
+    // KPIs avancement
+    const progKpis = [
+      { label: "Avancement global", value: `${globalPct}%`,            color: globalPct >= 80 ? C.green : globalPct >= 40 ? C.yellow : C.amber },
+      { label: "Terminées",         value: `${doneCount}/${active.length}`, color: C.green },
+      { label: "En cours",          value: String(inProgress),         color: C.blue  },
+      { label: "En retard",         value: String(lateCount),          color: lateCount > 0 ? C.red : C.muted },
+    ];
+    progKpis.forEach((k, i) => {
+      const x = 0.4 + i * 3.18;
+      progSlide.addShape(pptx.ShapeType.rect, { x, y: 1.3, w: 3, h: 1.15, fill: { color: C.dark2 }, line: { color: C.border } });
+      progSlide.addShape(pptx.ShapeType.rect, { x, y: 1.3, w: 0.08, h: 1.15, fill: { color: k.color }, line: { color: k.color } });
+      progSlide.addText(k.value, { x: x + 0.2, y: 1.42, w: 2.7, h: 0.6, fontSize: 26, color: k.color, bold: true, fontFace: "Century Gothic" });
+      progSlide.addText(k.label, { x: x + 0.2, y: 2.02, w: 2.7, h: 0.32, fontSize: 11, color: C.muted, fontFace: "Century Gothic" });
+    });
+
+    // Barre de progression globale
+    progSlide.addShape(pptx.ShapeType.rect, { x: 0.4, y: 2.75, w: 12.5, h: 0.22, fill: { color: C.dark2 }, line: { color: C.border } });
+    if (globalPct > 0) {
+      progSlide.addShape(pptx.ShapeType.rect, {
+        x: 0.4, y: 2.75, w: 12.5 * (globalPct / 100), h: 0.22,
+        fill: { color: globalPct >= 80 ? C.green : C.yellow }, line: { color: C.border },
+      });
+    }
+
+    // Tableau par tâche : retards d'abord, puis avancement décroissant
+    const sorted = [...data.tasks].sort((a, b) => {
+      const la = isTaskLate(a) ? 1 : 0, lb = isTaskLate(b) ? 1 : 0;
+      if (la !== lb) return lb - la;
+      return (b.progress_pct ?? 0) - (a.progress_pct ?? 0);
+    });
+
+    progSlide.addTable(
+      [
+        [
+          { text: "Tâche",      options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
+          { text: "Statut",     options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
+          { text: "Échéance",   options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
+          { text: "Avancement", options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
+          { text: "Suivi",      options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
+        ],
+        ...sorted.slice(0, 12).map((t, ri) => {
+          const bg   = ri % 2 === 0 ? C.dark2 : C.dark3;
+          const late = isTaskLate(t);
+          const pct  = t.status === "done" ? 100 : (t.progress_pct ?? 0);
+          const pctColor = pct >= 100 ? C.green : late ? C.red : pct > 0 ? C.yellow : C.muted;
+          return [
+            { text: t.title.slice(0, 46) + (t.title.length > 46 ? "…" : ""), options: { color: C.white, bold: true, fill: { color: bg } } },
+            { text: taskStatusLabel(t.status), options: { color: C.muted, fill: { color: bg } } },
+            { text: fmtDate(t.due_date),       options: { color: C.muted, fill: { color: bg } } },
+            { text: `${pct}%`,                 options: { color: pctColor, bold: true, fill: { color: bg } } },
+            { text: late ? "⚠ En retard" : pct >= 100 ? "✓ Terminé" : "Dans les temps",
+              options: { color: late ? C.red : pct >= 100 ? C.green : C.muted, bold: late, fill: { color: bg } } },
+          ];
+        }),
+      ],
+      {
+        x: 0.4, y: 3.25, w: 12.5, h: 3.7,
+        fontSize: 10, rowH: 0.34,
+        fontFace: "Century Gothic",
+        colW: [5.7, 1.9, 1.9, 1.5, 1.5],
+        border: { type: "solid", color: C.border, pt: 0.5 },
+      }
+    );
+
+    if (data.tasks.length > 12) {
+      progSlide.addText(`+ ${data.tasks.length - 12} autre(s) tâche(s) non affichée(s)`, {
+        x: 0.4, y: 7.0, w: 12.5, h: 0.3, fontSize: 9, color: C.muted, italic: true, align: "right", fontFace: "Century Gothic",
+      });
+    }
+  }
+
+  // ── Slide 4 : Classification des tâches ───────────────────────────────────
   if (data.tasks.length > 0) {
     const tasksSlide = pptx.addSlide();
     tasksSlide.background = { color: C.dark };
