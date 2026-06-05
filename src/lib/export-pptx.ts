@@ -9,18 +9,19 @@ interface ExportData {
   memberCount: number;
 }
 
+// Palette inspirée du template Babel (fond sombre + jaune)
 const C = {
-  navy:    "1E2D4E",
-  indigo:  "4F46E5",
+  dark:    "191E29",   // fond principal
+  dark2:   "242B3A",   // fond cartes
+  dark3:   "1A2032",   // fond lignes alternées
+  yellow:  "F9E859",   // accent primaire
+  amber:   "FBAE40",   // accent secondaire
   white:   "FFFFFF",
-  light:   "F8FAFC",
-  grey:    "64748B",
-  greyBg:  "F1F5F9",
-  border:  "E2E8F0",
-  green:   "16A34A",
-  amber:   "D97706",
-  red:     "DC2626",
-  blue:    "2563EB",
+  muted:   "B7B2C3",   // texte secondaire
+  border:  "2E3A50",   // bordures subtiles
+  green:   "4ADE80",
+  red:     "F87171",
+  blue:    "60A5FA",
 };
 
 function methodologyLabel(m: string | null | undefined) {
@@ -58,105 +59,165 @@ export async function exportProjectToPptx(data: ExportData) {
   pptx.title     = data.project.name;
 
   const W = 13.33;
+  const H = 7.5;
 
   // ── Slide 1 : Couverture ───────────────────────────────────────────────────
   const cover = pptx.addSlide();
-  cover.background = { color: C.navy };
+  cover.background = { color: C.dark };
 
+  // Bande jaune verticale gauche
   cover.addShape(pptx.ShapeType.rect, {
-    x: 0, y: 5.2, w: W, h: 2.3, fill: { color: C.indigo }, line: { color: C.indigo },
+    x: 0, y: 0, w: 0.5, h: H,
+    fill: { color: C.yellow }, line: { color: C.yellow },
   });
 
+  // Ligne décorative horizontale jaune
+  cover.addShape(pptx.ShapeType.rect, {
+    x: 0.5, y: 4.5, w: W - 0.5, h: 0.04,
+    fill: { color: C.yellow }, line: { color: C.yellow },
+  });
+
+  // Label PM Studio
   cover.addText("PM Studio", {
-    x: 0.6, y: 0.4, w: 8, h: 0.5,
-    fontSize: 13, color: "A5B4FC", bold: false,
+    x: 0.9, y: 0.6, w: 10, h: 0.45,
+    fontSize: 13, color: C.yellow, bold: false, fontFace: "Century Gothic",
   });
-  cover.addText(data.project.name, {
-    x: 0.6, y: 1.0, w: 11, h: 1.6,
-    fontSize: 36, color: C.white, bold: true, breakLine: false,
-  });
-  cover.addText([
-    { text: "Méthodologie : ", options: { color: "A5B4FC", bold: false } },
-    { text: methodologyLabel(data.project.methodology_applied), options: { color: C.white, bold: true } },
-  ], { x: 0.6, y: 2.7, w: 8, h: 0.4, fontSize: 14 });
 
+  // Titre du projet
+  cover.addText(data.project.name, {
+    x: 0.9, y: 1.2, w: 11.5, h: 2.2,
+    fontSize: 38, color: C.white, bold: true, fontFace: "Century Gothic",
+    wrap: true,
+  });
+
+  // Méthodologie
   cover.addText([
-    { text: "Statut : ", options: { color: "A5B4FC" } },
+    { text: "Méthodologie : ", options: { color: C.muted, bold: false } },
+    { text: methodologyLabel(data.project.methodology_applied), options: { color: C.yellow, bold: true } },
+  ], { x: 0.9, y: 3.6, w: 8, h: 0.4, fontSize: 14, fontFace: "Century Gothic" });
+
+  // Statut
+  cover.addText([
+    { text: "Statut : ", options: { color: C.muted } },
     { text: statusLabel(data.project.status), options: { color: C.white, bold: true } },
-  ], { x: 0.6, y: 3.1, w: 8, h: 0.4, fontSize: 14 });
+  ], { x: 0.9, y: 4.1, w: 8, h: 0.4, fontSize: 14, fontFace: "Century Gothic" });
 
   if (data.project.description) {
     cover.addText(data.project.description, {
-      x: 0.6, y: 3.6, w: 10, h: 0.8,
-      fontSize: 12, color: "94A3B8", italic: true,
+      x: 0.9, y: 4.75, w: 11, h: 0.7,
+      fontSize: 11, color: C.muted, italic: true, fontFace: "Century Gothic",
     });
   }
 
-  cover.addText(`Rapport généré le ${new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })}`, {
-    x: 0.6, y: 5.5, w: 10, h: 0.4, fontSize: 11, color: C.white,
-  });
+  // Date + confidentialité
+  cover.addText(
+    `Rapport généré le ${new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })}`,
+    { x: 0.9, y: 6.4, w: 9, h: 0.35, fontSize: 10, color: C.muted, fontFace: "Century Gothic" }
+  );
   cover.addText("Document confidentiel — Consort France", {
-    x: 0.6, y: 5.9, w: 10, h: 0.3, fontSize: 10, color: "C7D2FE", italic: true,
+    x: 0.9, y: 6.8, w: 9, h: 0.3, fontSize: 9, color: C.muted, italic: true, fontFace: "Century Gothic",
   });
 
   // ── Slide 2 : Vue d'ensemble ───────────────────────────────────────────────
   const overview = pptx.addSlide();
-  overview.background = { color: C.light };
+  overview.background = { color: C.dark };
   _addHeader(pptx, overview, "Vue d'ensemble", data.project.name);
 
   const kpis = [
-    { label: "Tâches",       value: String(data.tasks.length),    color: C.indigo },
-    { label: "Sprints",      value: String(data.sprints.length),  color: C.blue   },
-    { label: "Phases",       value: String(data.phases.length),   color: C.navy   },
-    { label: "Jalons",       value: String(data.milestones.length), color: C.green },
-    { label: "Membres",      value: String(data.memberCount),     color: C.amber  },
-    { label: "Budget",       value: fmtEuro(data.project.budget), color: C.grey   },
+    { label: "Tâches",    value: String(data.tasks.length),      color: C.yellow },
+    { label: "Sprints",   value: String(data.sprints.length),    color: C.amber  },
+    { label: "Phases",    value: String(data.phases.length),     color: C.blue   },
+    { label: "Jalons",    value: String(data.milestones.length), color: C.green  },
+    { label: "Membres",   value: String(data.memberCount),       color: C.yellow },
+    { label: "Budget",    value: fmtEuro(data.project.budget),   color: C.amber  },
   ];
 
   kpis.forEach((k, i) => {
     const col = i % 3;
     const row = Math.floor(i / 3);
     const x = 0.4 + col * 4.3;
-    const y = 1.4 + row * 1.5;
-    overview.addShape(pptx.ShapeType.rect, { x, y, w: 4, h: 1.2, fill: { color: C.white }, line: { color: C.border, pt: 1 }, rectRadius: 0.08 });
-    overview.addShape(pptx.ShapeType.rect, { x, y, w: 0.12, h: 1.2, fill: { color: k.color }, line: { color: k.color } });
-    overview.addText(k.value, { x: x + 0.25, y: y + 0.15, w: 3.6, h: 0.55, fontSize: 26, color: k.color, bold: true });
-    overview.addText(k.label,  { x: x + 0.25, y: y + 0.72, w: 3.6, h: 0.35, fontSize: 11, color: C.grey });
+    const y = 1.4 + row * 1.55;
+    // Carte sombre
+    overview.addShape(pptx.ShapeType.rect, {
+      x, y, w: 4, h: 1.3,
+      fill: { color: C.dark2 }, line: { color: C.border, pt: 1 },
+    });
+    // Barre jaune gauche
+    overview.addShape(pptx.ShapeType.rect, {
+      x, y, w: 0.08, h: 1.3,
+      fill: { color: k.color }, line: { color: k.color },
+    });
+    overview.addText(k.value, {
+      x: x + 0.25, y: y + 0.15, w: 3.6, h: 0.65,
+      fontSize: 30, color: k.color, bold: true, fontFace: "Century Gothic",
+    });
+    overview.addText(k.label, {
+      x: x + 0.25, y: y + 0.82, w: 3.6, h: 0.32,
+      fontSize: 11, color: C.muted, fontFace: "Century Gothic",
+    });
   });
 
-  // Dates & budget
+  // Infos dates
   const infoRows: [string, string][] = [
-    ["Début",       fmtDate(data.project.start_date)],
-    ["Fin prévue",  fmtDate(data.project.end_date)],
-    ["Reco. PM Studio", methodologyLabel(data.project.methodology_recommended)],
-    ["Appliquée",   methodologyLabel(data.project.methodology_applied)],
+    ["Début",            fmtDate(data.project.start_date)],
+    ["Fin prévue",       fmtDate(data.project.end_date)],
+    ["Reco. PM Studio",  methodologyLabel(data.project.methodology_recommended)],
+    ["Appliquée",        methodologyLabel(data.project.methodology_applied)],
   ];
-  overview.addShape(pptx.ShapeType.rect, { x: 0.4, y: 4.55, w: 12.5, h: 1.85, fill: { color: C.white }, line: { color: C.border, pt: 1 }, rectRadius: 0.08 });
+  overview.addShape(pptx.ShapeType.rect, {
+    x: 0.4, y: 4.65, w: 12.5, h: 1.8,
+    fill: { color: C.dark2 }, line: { color: C.border, pt: 1 },
+  });
+  // Ligne jaune haut de la carte infos
+  overview.addShape(pptx.ShapeType.rect, {
+    x: 0.4, y: 4.65, w: 12.5, h: 0.05,
+    fill: { color: C.yellow }, line: { color: C.yellow },
+  });
   infoRows.forEach(([lbl, val], i) => {
     const x = 0.7 + i * 3.1;
-    overview.addText(lbl, { x, y: 4.75, w: 2.8, h: 0.3, fontSize: 9, color: C.grey });
-    overview.addText(val, { x, y: 5.05, w: 2.8, h: 0.35, fontSize: 12, color: C.navy, bold: true });
+    overview.addText(lbl, {
+      x, y: 4.85, w: 2.8, h: 0.3,
+      fontSize: 9, color: C.muted, fontFace: "Century Gothic",
+    });
+    overview.addText(val, {
+      x, y: 5.18, w: 2.8, h: 0.38,
+      fontSize: 13, color: C.white, bold: true, fontFace: "Century Gothic",
+    });
   });
 
   // ── Slide 3 : Classification des tâches ───────────────────────────────────
   if (data.tasks.length > 0) {
     const tasksSlide = pptx.addSlide();
-    tasksSlide.background = { color: C.light };
+    tasksSlide.background = { color: C.dark };
     _addHeader(pptx, tasksSlide, "Classification des tâches", data.project.name);
 
     const summary = [
-      { label: "Cycle en V", count: data.tasks.filter(t => t.methodology_recommendation === "cycle_v").length, color: C.blue },
-      { label: "Agile",      count: data.tasks.filter(t => t.methodology_recommendation === "agile").length,   color: C.green },
-      { label: "Hybride",    count: data.tasks.filter(t => t.methodology_recommendation === "hybrid").length,  color: C.amber },
+      { label: "Cycle en V", count: data.tasks.filter(t => t.methodology_recommendation === "cycle_v").length, color: C.blue   },
+      { label: "Agile",      count: data.tasks.filter(t => t.methodology_recommendation === "agile").length,   color: C.green  },
+      { label: "Hybride",    count: data.tasks.filter(t => t.methodology_recommendation === "hybrid").length,  color: C.amber  },
     ];
     summary.forEach((s, i) => {
       const x = 0.4 + i * 4.3;
-      tasksSlide.addShape(pptx.ShapeType.rect, { x, y: 1.3, w: 4, h: 0.9, fill: { color: C.white }, line: { color: C.border }, rectRadius: 0.08 });
-      tasksSlide.addText(`${s.count} ${s.label}`, { x: x + 0.15, y: 1.45, w: 3.7, h: 0.6, fontSize: 14, color: s.color, bold: true });
+      tasksSlide.addShape(pptx.ShapeType.rect, {
+        x, y: 1.3, w: 4, h: 0.95,
+        fill: { color: C.dark2 }, line: { color: C.border },
+      });
+      tasksSlide.addShape(pptx.ShapeType.rect, {
+        x, y: 1.3, w: 0.08, h: 0.95,
+        fill: { color: s.color }, line: { color: s.color },
+      });
+      tasksSlide.addText(`${s.count}`, {
+        x: x + 0.25, y: 1.35, w: 1, h: 0.6,
+        fontSize: 26, color: s.color, bold: true, fontFace: "Century Gothic",
+      });
+      tasksSlide.addText(s.label, {
+        x: x + 1.2, y: 1.5, w: 2.6, h: 0.4,
+        fontSize: 13, color: C.white, fontFace: "Century Gothic",
+      });
     });
 
     const rows = data.tasks.slice(0, 10).map(t => [
-      t.title.slice(0, 40) + (t.title.length > 40 ? "…" : ""),
+      t.title.slice(0, 42) + (t.title.length > 42 ? "…" : ""),
       methodologyLabel(t.methodology_recommendation),
       methodologyLabel(t.methodology),
       t.decision_score_v != null ? `V:${t.decision_score_v} / A:${t.decision_score_agile}` : "—",
@@ -165,120 +226,180 @@ export async function exportProjectToPptx(data: ExportData) {
     tasksSlide.addTable(
       [
         [
-          { text: "Tâche",           options: { bold: true, color: C.white, fill: { color: C.navy } } },
-          { text: "Recommandation",  options: { bold: true, color: C.white, fill: { color: C.navy } } },
-          { text: "Appliquée",       options: { bold: true, color: C.white, fill: { color: C.navy } } },
-          { text: "Scores",          options: { bold: true, color: C.white, fill: { color: C.navy } } },
+          { text: "Tâche",           options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
+          { text: "Recommandation",  options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
+          { text: "Appliquée",       options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
+          { text: "Scores",          options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
         ],
         ...rows.map((r, ri) => r.map(cell => ({
           text: cell,
-          options: { color: C.navy, fill: { color: ri % 2 === 0 ? C.white : C.greyBg } },
+          options: {
+            color: C.white,
+            fill: { color: ri % 2 === 0 ? C.dark2 : C.dark3 },
+          },
         }))),
       ],
-      { x: 0.4, y: 2.35, w: 12.5, h: 4.5, fontSize: 10, rowH: 0.35, border: { type: "solid", color: C.border, pt: 0.5 } }
+      {
+        x: 0.4, y: 2.4, w: 12.5, h: 4.5,
+        fontSize: 10, rowH: 0.38,
+        fontFace: "Century Gothic",
+        border: { type: "solid", color: C.border, pt: 0.5 },
+      }
     );
   }
 
   // ── Slide 4 : Agile — Vélocité ─────────────────────────────────────────────
   if (data.sprints.length > 0) {
     const agileSlide = pptx.addSlide();
-    agileSlide.background = { color: C.light };
+    agileSlide.background = { color: C.dark };
     _addHeader(pptx, agileSlide, "Agile — Vélocité des sprints", data.project.name);
 
     const sprintsToShow = data.sprints.slice(0, 8);
     const maxV = Math.max(...sprintsToShow.map(s => Math.max(s.velocity_planned, s.velocity_achieved)), 1);
-    const barH = 2.8;
-    const barW = 1.1;
+    const barH  = 2.8;
+    const barW  = 1.1;
     const startX = 0.8;
-    const baseY = 5.5;
+    const baseY  = 5.5;
 
     sprintsToShow.forEach((s, i) => {
       const x = startX + i * 1.55;
-      const plannedH = (s.velocity_planned / maxV) * barH;
+      const plannedH  = (s.velocity_planned / maxV)  * barH;
       const achievedH = (s.velocity_achieved / maxV) * barH;
+      const ok = s.velocity_achieved >= s.velocity_planned;
 
+      // Barre planifiée
       agileSlide.addShape(pptx.ShapeType.rect, {
-        x: x, y: baseY - plannedH, w: barW * 0.45, h: plannedH,
-        fill: { color: "BFDBFE" }, line: { color: C.blue, pt: 0.5 },
+        x,
+        y: baseY - plannedH,
+        w: barW * 0.45,
+        h: plannedH,
+        fill: { color: "2D4A7A" },
+        line: { color: C.blue, pt: 0.5 },
       });
+      // Barre réalisée
       agileSlide.addShape(pptx.ShapeType.rect, {
-        x: x + barW * 0.48, y: baseY - achievedH, w: barW * 0.45, h: achievedH,
-        fill: { color: s.velocity_achieved >= s.velocity_planned ? "86EFAC" : "FCA5A5" },
-        line: { color: s.velocity_achieved >= s.velocity_planned ? C.green : C.red, pt: 0.5 },
+        x: x + barW * 0.48,
+        y: baseY - achievedH,
+        w: barW * 0.45,
+        h: achievedH,
+        fill: { color: ok ? "1A4A2E" : "4A1A1A" },
+        line: { color: ok ? C.green : C.red, pt: 0.5 },
       });
-      agileSlide.addText(s.name.slice(0, 8), { x: x - 0.1, y: baseY + 0.08, w: 1.3, h: 0.3, fontSize: 8, color: C.grey, align: "center" });
+      agileSlide.addText(s.name.slice(0, 8), {
+        x: x - 0.1, y: baseY + 0.08, w: 1.3, h: 0.3,
+        fontSize: 8, color: C.muted, align: "center", fontFace: "Century Gothic",
+      });
     });
 
     agileSlide.addText([
-      { text: "■ ", options: { color: "BFDBFE" } }, { text: "Planifié  ", options: { color: C.grey } },
-      { text: "■ ", options: { color: "86EFAC" } }, { text: "Réalisé (objectif atteint)  ", options: { color: C.grey } },
-      { text: "■ ", options: { color: "FCA5A5" } }, { text: "Réalisé (sous objectif)", options: { color: C.grey } },
-    ], { x: 0.4, y: 2.0, w: 12, h: 0.4, fontSize: 10 });
+      { text: "■ ", options: { color: C.blue } }, { text: "Planifié  ",                     options: { color: C.muted } },
+      { text: "■ ", options: { color: C.green } }, { text: "Réalisé (objectif atteint)  ", options: { color: C.muted } },
+      { text: "■ ", options: { color: C.red   } }, { text: "Réalisé (sous objectif)",      options: { color: C.muted } },
+    ], { x: 0.4, y: 2.0, w: 12, h: 0.4, fontSize: 10, fontFace: "Century Gothic" });
 
     const totalPlanned  = data.sprints.reduce((a, s) => a + s.velocity_planned,  0);
     const totalAchieved = data.sprints.reduce((a, s) => a + s.velocity_achieved, 0);
     const ratio = totalPlanned > 0 ? Math.round((totalAchieved / totalPlanned) * 100) : 0;
+    const perfColor = ratio >= 80 ? C.green : C.amber;
 
-    agileSlide.addShape(pptx.ShapeType.rect, { x: 9.5, y: 2.5, w: 3.4, h: 2.5, fill: { color: C.white }, line: { color: C.border }, rectRadius: 0.08 });
-    agileSlide.addText("Performance globale", { x: 9.6, y: 2.65, w: 3.2, h: 0.35, fontSize: 11, color: C.grey, bold: true });
-    agileSlide.addText(`${ratio}%`, { x: 9.6, y: 3.05, w: 3.2, h: 0.8, fontSize: 40, color: ratio >= 80 ? C.green : C.amber, bold: true, align: "center" });
-    agileSlide.addText(`${totalAchieved} / ${totalPlanned} pts`, { x: 9.6, y: 3.85, w: 3.2, h: 0.35, fontSize: 11, color: C.grey, align: "center" });
-    agileSlide.addText("points réalisés / planifiés", { x: 9.6, y: 4.2, w: 3.2, h: 0.3, fontSize: 9, color: C.grey, align: "center", italic: true });
+    // Carte performance
+    agileSlide.addShape(pptx.ShapeType.rect, {
+      x: 9.5, y: 2.5, w: 3.4, h: 2.8,
+      fill: { color: C.dark2 }, line: { color: C.border },
+    });
+    agileSlide.addShape(pptx.ShapeType.rect, {
+      x: 9.5, y: 2.5, w: 3.4, h: 0.05,
+      fill: { color: C.yellow }, line: { color: C.yellow },
+    });
+    agileSlide.addText("Performance globale", {
+      x: 9.6, y: 2.65, w: 3.2, h: 0.35,
+      fontSize: 11, color: C.muted, bold: true, fontFace: "Century Gothic",
+    });
+    agileSlide.addText(`${ratio}%`, {
+      x: 9.6, y: 3.1, w: 3.2, h: 0.85,
+      fontSize: 44, color: perfColor, bold: true, align: "center", fontFace: "Century Gothic",
+    });
+    agileSlide.addText(`${totalAchieved} / ${totalPlanned} pts`, {
+      x: 9.6, y: 4.0, w: 3.2, h: 0.35,
+      fontSize: 11, color: C.muted, align: "center", fontFace: "Century Gothic",
+    });
+    agileSlide.addText("points réalisés / planifiés", {
+      x: 9.6, y: 4.35, w: 3.2, h: 0.3,
+      fontSize: 9, color: C.muted, align: "center", italic: true, fontFace: "Century Gothic",
+    });
   }
 
   // ── Slide 5 : Cycle en V — Phases ─────────────────────────────────────────
   if (data.phases.length > 0) {
     const phasesSlide = pptx.addSlide();
-    phasesSlide.background = { color: C.light };
+    phasesSlide.background = { color: C.dark };
     _addHeader(pptx, phasesSlide, "Cycle en V — Avancement des phases", data.project.name);
 
     const completed = data.phases.filter(p => p.status === "completed").length;
     const progress  = Math.round((completed / data.phases.length) * 100);
 
     phasesSlide.addText(`Avancement global : ${completed}/${data.phases.length} phases (${progress}%)`, {
-      x: 0.4, y: 1.3, w: 9, h: 0.4, fontSize: 13, color: C.navy, bold: true,
+      x: 0.4, y: 1.3, w: 9, h: 0.4,
+      fontSize: 13, color: C.white, bold: true, fontFace: "Century Gothic",
     });
-    phasesSlide.addShape(pptx.ShapeType.rect, { x: 0.4, y: 1.8, w: 12.5, h: 0.25, fill: { color: C.border }, line: { color: C.border }, rectRadius: 0.1 });
-    phasesSlide.addShape(pptx.ShapeType.rect, { x: 0.4, y: 1.8, w: 12.5 * (progress / 100), h: 0.25, fill: { color: C.indigo }, line: { color: C.indigo }, rectRadius: 0.1 });
+
+    // Barre de progression
+    phasesSlide.addShape(pptx.ShapeType.rect, {
+      x: 0.4, y: 1.85, w: 12.5, h: 0.22,
+      fill: { color: C.dark2 }, line: { color: C.border },
+    });
+    if (progress > 0) {
+      phasesSlide.addShape(pptx.ShapeType.rect, {
+        x: 0.4, y: 1.85, w: 12.5 * (progress / 100), h: 0.22,
+        fill: { color: C.yellow }, line: { color: C.yellow },
+      });
+    }
 
     const statusMap: Record<string, { label: string; color: string }> = {
-      pending:     { label: "En attente",  color: C.grey  },
-      active:      { label: "En cours",    color: C.indigo },
-      gate_review: { label: "Gate Review", color: C.amber },
-      completed:   { label: "Terminée",    color: C.green },
-      rejected:    { label: "Rejetée",     color: C.red   },
+      pending:     { label: "En attente",  color: C.muted  },
+      active:      { label: "En cours",    color: C.yellow },
+      gate_review: { label: "Gate Review", color: C.amber  },
+      completed:   { label: "Terminée",    color: C.green  },
+      rejected:    { label: "Rejetée",     color: C.red    },
     };
 
     phasesSlide.addTable(
       [
         [
-          { text: "#",           options: { bold: true, color: C.white, fill: { color: C.navy } } },
-          { text: "Phase",       options: { bold: true, color: C.white, fill: { color: C.navy } } },
-          { text: "Statut",      options: { bold: true, color: C.white, fill: { color: C.navy } } },
-          { text: "Démarré",     options: { bold: true, color: C.white, fill: { color: C.navy } } },
-          { text: "Terminé",     options: { bold: true, color: C.white, fill: { color: C.navy } } },
-          { text: "Gate Review", options: { bold: true, color: C.white, fill: { color: C.navy } } },
+          { text: "#",           options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
+          { text: "Phase",       options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
+          { text: "Statut",      options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
+          { text: "Démarré",     options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
+          { text: "Terminé",     options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
+          { text: "Gate Review", options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
         ],
         ...data.phases.map((p, ri) => {
-          const sc = statusMap[p.status] ?? { label: p.status, color: C.grey };
+          const sc = statusMap[p.status] ?? { label: p.status, color: C.muted };
+          const bg = ri % 2 === 0 ? C.dark2 : C.dark3;
           return [
-            { text: String(p.position), options: { color: C.grey, fill: { color: ri % 2 === 0 ? C.white : C.greyBg } } },
-            { text: p.name,             options: { color: C.navy, bold: true, fill: { color: ri % 2 === 0 ? C.white : C.greyBg } } },
-            { text: sc.label,           options: { color: sc.color, bold: true, fill: { color: ri % 2 === 0 ? C.white : C.greyBg } } },
-            { text: fmtDate(p.started_at),   options: { color: C.grey, fill: { color: ri % 2 === 0 ? C.white : C.greyBg } } },
-            { text: fmtDate(p.completed_at), options: { color: C.grey, fill: { color: ri % 2 === 0 ? C.white : C.greyBg } } },
-            { text: p.validation_required ? "Oui" : "Non", options: { color: p.validation_required ? C.amber : C.grey, fill: { color: ri % 2 === 0 ? C.white : C.greyBg } } },
+            { text: String(p.position), options: { color: C.muted,  fill: { color: bg } } },
+            { text: p.name,             options: { color: C.white,  bold: true, fill: { color: bg } } },
+            { text: sc.label,           options: { color: sc.color, bold: true, fill: { color: bg } } },
+            { text: fmtDate(p.started_at),   options: { color: C.muted, fill: { color: bg } } },
+            { text: fmtDate(p.completed_at), options: { color: C.muted, fill: { color: bg } } },
+            { text: p.validation_required ? "Oui" : "Non",
+              options: { color: p.validation_required ? C.amber : C.muted, fill: { color: bg } } },
           ];
         }),
       ],
-      { x: 0.4, y: 2.2, w: 12.5, h: 4.7, fontSize: 10, rowH: 0.4, border: { type: "solid", color: C.border, pt: 0.5 } }
+      {
+        x: 0.4, y: 2.25, w: 12.5, h: 4.7,
+        fontSize: 10, rowH: 0.4,
+        fontFace: "Century Gothic",
+        border: { type: "solid", color: C.border, pt: 0.5 },
+      }
     );
   }
 
   // ── Slide 6 : Jalons ──────────────────────────────────────────────────────
   if (data.milestones.length > 0) {
     const msSlide = pptx.addSlide();
-    msSlide.background = { color: C.light };
+    msSlide.background = { color: C.dark };
     _addHeader(pptx, msSlide, "Jalons", data.project.name);
 
     const achieved = data.milestones.filter(m => m.status === "achieved").length;
@@ -286,54 +407,122 @@ export async function exportProjectToPptx(data: ExportData) {
     const pending  = data.milestones.filter(m => m.status === "pending").length;
 
     [
-      { label: "Atteints", v: achieved, color: C.green },
-      { label: "Manqués",  v: missed,   color: C.red   },
-      { label: "En attente", v: pending, color: C.grey  },
+      { label: "Atteints",    v: achieved, color: C.green  },
+      { label: "Manqués",     v: missed,   color: C.red    },
+      { label: "En attente",  v: pending,  color: C.muted  },
     ].forEach((k, i) => {
       const x = 0.4 + i * 4.3;
-      msSlide.addShape(pptx.ShapeType.rect, { x, y: 1.3, w: 4, h: 0.9, fill: { color: C.white }, line: { color: C.border }, rectRadius: 0.08 });
-      msSlide.addText(String(k.v), { x: x + 0.15, y: 1.35, w: 1, h: 0.6, fontSize: 30, color: k.color, bold: true });
-      msSlide.addText(k.label, { x: x + 1.1, y: 1.5, w: 2.7, h: 0.4, fontSize: 12, color: C.grey });
+      msSlide.addShape(pptx.ShapeType.rect, {
+        x, y: 1.3, w: 4, h: 0.95,
+        fill: { color: C.dark2 }, line: { color: C.border },
+      });
+      msSlide.addShape(pptx.ShapeType.rect, {
+        x, y: 1.3, w: 0.08, h: 0.95,
+        fill: { color: k.color }, line: { color: k.color },
+      });
+      msSlide.addText(String(k.v), {
+        x: x + 0.25, y: 1.35, w: 1, h: 0.6,
+        fontSize: 28, color: k.color, bold: true, fontFace: "Century Gothic",
+      });
+      msSlide.addText(k.label, {
+        x: x + 1.2, y: 1.5, w: 2.6, h: 0.4,
+        fontSize: 13, color: C.white, fontFace: "Century Gothic",
+      });
     });
 
     msSlide.addTable(
       [
         [
-          { text: "Jalon",    options: { bold: true, color: C.white, fill: { color: C.navy } } },
-          { text: "Échéance", options: { bold: true, color: C.white, fill: { color: C.navy } } },
-          { text: "Atteint le", options: { bold: true, color: C.white, fill: { color: C.navy } } },
-          { text: "Statut",   options: { bold: true, color: C.white, fill: { color: C.navy } } },
+          { text: "Jalon",      options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
+          { text: "Échéance",   options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
+          { text: "Atteint le", options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
+          { text: "Statut",     options: { bold: true, color: C.dark, fill: { color: C.yellow } } },
         ],
         ...data.milestones.map((m, ri) => {
-          const sc = m.status === "achieved" ? C.green : m.status === "missed" ? C.red : C.grey;
+          const sc = m.status === "achieved" ? C.green : m.status === "missed" ? C.red : C.muted;
           const sl = m.status === "achieved" ? "Atteint" : m.status === "missed" ? "Manqué" : "En attente";
+          const bg = ri % 2 === 0 ? C.dark2 : C.dark3;
           return [
-            { text: m.title,              options: { color: C.navy, bold: true, fill: { color: ri % 2 === 0 ? C.white : C.greyBg } } },
-            { text: fmtDate(m.due_date),   options: { color: C.grey, fill: { color: ri % 2 === 0 ? C.white : C.greyBg } } },
-            { text: fmtDate(m.achieved_at), options: { color: C.grey, fill: { color: ri % 2 === 0 ? C.white : C.greyBg } } },
-            { text: sl,                   options: { color: sc, bold: true, fill: { color: ri % 2 === 0 ? C.white : C.greyBg } } },
+            { text: m.title,               options: { color: C.white, bold: true, fill: { color: bg } } },
+            { text: fmtDate(m.due_date),    options: { color: C.muted, fill: { color: bg } } },
+            { text: fmtDate(m.achieved_at), options: { color: C.muted, fill: { color: bg } } },
+            { text: sl,                     options: { color: sc, bold: true, fill: { color: bg } } },
           ];
         }),
       ],
-      { x: 0.4, y: 2.35, w: 12.5, h: 4.5, fontSize: 10, rowH: 0.4, border: { type: "solid", color: C.border, pt: 0.5 } }
+      {
+        x: 0.4, y: 2.4, w: 12.5, h: 4.5,
+        fontSize: 10, rowH: 0.4,
+        fontFace: "Century Gothic",
+        border: { type: "solid", color: C.border, pt: 0.5 },
+      }
     );
   }
 
-  // ── Slide finale : Pied de page ────────────────────────────────────────────
+  // ── Slide finale ───────────────────────────────────────────────────────────
   const last = pptx.addSlide();
-  last.background = { color: C.navy };
-  last.addShape(pptx.ShapeType.rect, { x: 0, y: 2.8, w: W, h: 2, fill: { color: C.indigo }, line: { color: C.indigo } });
-  last.addText("PM Studio", { x: 0.6, y: 1.2, w: 12, h: 0.6, fontSize: 14, color: "A5B4FC", align: "center" });
-  last.addText("Merci pour votre attention", { x: 0.6, y: 3.0, w: 12, h: 0.8, fontSize: 28, color: C.white, bold: true, align: "center" });
-  last.addText("by Consort France", { x: 0.6, y: 3.9, w: 12, h: 0.4, fontSize: 12, color: "C7D2FE", align: "center", italic: true });
+  last.background = { color: C.dark };
+
+  // Bande jaune verticale gauche
+  last.addShape(pptx.ShapeType.rect, {
+    x: 0, y: 0, w: 0.5, h: H,
+    fill: { color: C.yellow }, line: { color: C.yellow },
+  });
+
+  // Ligne jaune centrale
+  last.addShape(pptx.ShapeType.rect, {
+    x: 0.5, y: 3.4, w: W - 0.5, h: 0.04,
+    fill: { color: C.yellow }, line: { color: C.yellow },
+  });
+
+  last.addText("PM Studio", {
+    x: 0.9, y: 2.3, w: 12, h: 0.55,
+    fontSize: 14, color: C.yellow, align: "center", fontFace: "Century Gothic",
+  });
+  last.addText("Merci pour votre attention", {
+    x: 0.9, y: 3.6, w: 12, h: 0.9,
+    fontSize: 32, color: C.white, bold: true, align: "center", fontFace: "Century Gothic",
+  });
+  last.addText("by Consort France", {
+    x: 0.9, y: 4.6, w: 12, h: 0.4,
+    fontSize: 13, color: C.muted, align: "center", italic: true, fontFace: "Century Gothic",
+  });
 
   const fileName = `${data.project.name.replace(/[^a-zA-Z0-9\s]/g, "").trim()}_rapport_${new Date().toISOString().slice(0, 10)}.pptx`;
   await pptx.writeFile({ fileName });
 }
 
-function _addHeader(pptx: InstanceType<typeof import("pptxgenjs")["default"]>, slide: ReturnType<typeof pptx.addSlide>, title: string, subtitle: string) {
-  slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 13.33, h: 1.1, fill: { color: "1E2D4E" }, line: { color: "1E2D4E" } });
-  slide.addText(title,    { x: 0.4, y: 0.12, w: 10, h: 0.5, fontSize: 20, color: "FFFFFF", bold: true });
-  slide.addText(subtitle, { x: 0.4, y: 0.62, w: 10, h: 0.35, fontSize: 11, color: "A5B4FC" });
-  slide.addText("PM Studio", { x: 10.5, y: 0.3, w: 2.5, h: 0.5, fontSize: 11, color: "4F46E5", bold: true, align: "right" });
+function _addHeader(
+  pptx: InstanceType<typeof import("pptxgenjs")["default"]>,
+  slide: ReturnType<typeof pptx.addSlide>,
+  title: string,
+  subtitle: string
+) {
+  // Fond sombre de la bande header
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 0, y: 0, w: 13.33, h: 1.1,
+    fill: { color: C.dark2 }, line: { color: C.dark2 },
+  });
+  // Barre jaune en bas du header
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 0, y: 1.1, w: 13.33, h: 0.05,
+    fill: { color: C.yellow }, line: { color: C.yellow },
+  });
+  // Trait vertical jaune gauche
+  slide.addShape(pptx.ShapeType.rect, {
+    x: 0.4, y: 0.12, w: 0.06, h: 0.86,
+    fill: { color: C.yellow }, line: { color: C.yellow },
+  });
+  slide.addText(title, {
+    x: 0.62, y: 0.1, w: 10, h: 0.55,
+    fontSize: 22, color: C.white, bold: true, fontFace: "Century Gothic",
+  });
+  slide.addText(subtitle, {
+    x: 0.62, y: 0.65, w: 10, h: 0.33,
+    fontSize: 11, color: C.yellow, fontFace: "Century Gothic",
+  });
+  slide.addText("PM Studio", {
+    x: 10.5, y: 0.3, w: 2.5, h: 0.5,
+    fontSize: 11, color: C.yellow, bold: true, align: "right", fontFace: "Century Gothic",
+  });
 }
