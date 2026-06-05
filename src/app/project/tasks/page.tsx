@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useTasks, useCreateTask, useUpdateTask, useDeleteTask, useTaskDependencies, useProjectMembers } from "@/hooks/useProjects";
+import { useTasks, useCreateTask, useUpdateTask, useUpdateTaskSilent, useDeleteTask, useTaskDependencies, useProjectMembers, useMyMemberships } from "@/hooks/useProjects";
 import { useMemo } from "react";
 import { Trash2, CalendarDays, User, Link2 } from "lucide-react";
 import Comments from "@/components/Comments";
@@ -293,12 +293,70 @@ const STATUS_COLORS: Record<string, string> = {
   blocked: "text-red-400", done: "text-green-400", cancelled: "text-slate-600",
 };
 
+// Contrôle d'avancement : éditable (slider) pour PM/PMO, lecture seule sinon
+function ProgressControl({ task, projectId, editable }: { task: Task; projectId: string; editable: boolean }) {
+  const update = useUpdateTaskSilent();
+  const initial = task.status === "done" ? 100 : (task.progress_pct ?? 0);
+  const [value, setValue] = useState(initial);
+  const [saving, setSaving] = useState(false);
+
+  // Resynchroniser si la tâche est modifiée ailleurs (changement de statut, autre user…)
+  useEffect(() => { setValue(task.status === "done" ? 100 : (task.progress_pct ?? 0)); }, [task.progress_pct, task.status]);
+
+  const barColor = value === 100 ? "bg-green-500" : value >= 50 ? "bg-indigo-500" : value > 0 ? "bg-amber-500" : "bg-slate-600";
+  const txtColor = value === 100 ? "text-green-400" : value > 0 ? "text-slate-300" : "text-slate-500";
+
+  async function commit(v: number) {
+    setSaving(true);
+    try {
+      const newStatus =
+        v === 100 ? "done"
+        : v > 0 ? (task.status === "done" || task.status === "todo" ? "in_progress" : task.status)
+        : task.status;
+      await update.mutateAsync({ id: task.id, project_id: projectId, progress_pct: v, status: newStatus as Task["status"] });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!editable) {
+    return (
+      <div className="mt-2 flex items-center gap-2">
+        <div className="w-32 bg-slate-800 rounded-full h-1.5 overflow-hidden">
+          <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${value}%` }} />
+        </div>
+        <span className={`text-xs font-medium ${txtColor}`}>{value} %</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 flex items-center gap-2 max-w-sm">
+      <span className="text-xs text-slate-500 shrink-0">Avancement</span>
+      <input
+        type="range" min={0} max={100} step={5} value={value}
+        onChange={e => setValue(parseInt(e.target.value))}
+        onMouseUp={e => commit(parseInt((e.target as HTMLInputElement).value))}
+        onTouchEnd={e => commit(parseInt((e.target as HTMLInputElement).value))}
+        disabled={task.status === "cancelled"}
+        className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer bg-slate-800 accent-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+      />
+      <span className={`text-xs font-semibold w-12 text-right shrink-0 transition-colors ${saving ? "text-indigo-400" : txtColor}`}>
+        {value}%{saving ? " …" : ""}
+      </span>
+    </div>
+  );
+}
+
 function TasksPageContent() {
   const searchParams = useSearchParams();
   const id = searchParams.get("id");
   const { data: tasks, isLoading } = useTasks(id);
   const { data: deps    = [] }     = useTaskDependencies(id);
   const { data: members = [] }     = useProjectMembers(id);
+  const { data: memberships = [] } = useMyMemberships();
+  const myRole = memberships.find(m => m.project_id === id)?.role ?? null;
+  const canEditProgress = myRole === "pm" || myRole === "pmo";
   const deleteTask  = useDeleteTask();
   const updateTask  = useUpdateTask();
   const [showModal,  setShowModal]  = useState(false);
@@ -393,20 +451,8 @@ function TasksPageContent() {
                         )}
                       </div>
 
-                      {/* Avancement (mis à jour par les devs depuis « Mes tâches ») */}
-                      {(() => {
-                        const pct = task.progress_pct ?? 0;
-                        const barColor = pct === 100 ? "bg-green-500" : pct >= 50 ? "bg-indigo-500" : pct > 0 ? "bg-amber-500" : "bg-slate-600";
-                        const txtColor = pct === 100 ? "text-green-400" : pct > 0 ? "text-slate-300" : "text-slate-500";
-                        return (
-                          <div className="mt-2 flex items-center gap-2">
-                            <div className="w-32 bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                              <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
-                            </div>
-                            <span className={`text-xs font-medium ${txtColor}`}>{pct} %</span>
-                          </div>
-                        );
-                      })()}
+                      {/* Avancement — éditable par PM/PMO, sinon lecture seule */}
+                      <ProgressControl task={task} projectId={task.project_id} editable={canEditProgress} />
 
                       {task.decision_score_v !== null && (
                         <div className="mt-2 flex items-center gap-3">
