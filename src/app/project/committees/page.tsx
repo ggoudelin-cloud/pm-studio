@@ -104,7 +104,7 @@ function CommitteeModal({ projectId, committee, onClose }: {
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-slate-300">Participants (séparés par virgule)</label>
               <input type="text" value={attendees} onChange={e => setAttendees(e.target.value)}
-                placeholder="Sophie Martin, Pierre-Henri Bellet, Thomas Leblanc…"
+                placeholder="Gilles Goudelin, Pierre-Henri Bellet, Thomas Leblanc…"
                 className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             </div>
             <div className="flex flex-col gap-1.5">
