@@ -29,6 +29,7 @@ import {
   closestCorners,
   type DragEndEvent,
   type DragStartEvent,
+  type DragOverEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -142,6 +143,7 @@ function DroppableColumn({
   children,
   count,
   isLoading,
+  isHighlighted,
 }: {
   columnKey: string;
   label: string;
@@ -149,8 +151,9 @@ function DroppableColumn({
   children: React.ReactNode;
   count: number;
   isLoading: boolean;
+  isHighlighted: boolean;
 }) {
-  const { setNodeRef, isOver } = useDroppable({
+  const { setNodeRef } = useDroppable({
     id: columnKey,
     data: { type: "column" },
   });
@@ -165,7 +168,7 @@ function DroppableColumn({
         <div
           ref={setNodeRef}
           className={`flex flex-col gap-2 min-h-32 p-2 border rounded-xl transition-colors ${
-            isOver ? "border-indigo-500 bg-indigo-950/20" : "bg-slate-900/50 border-slate-800"
+            isHighlighted ? "border-indigo-500 bg-indigo-950/20" : "bg-slate-900/50 border-slate-800"
           }`}
         >
           {isLoading ? (
@@ -380,6 +383,7 @@ function AgilePageContent() {
   const [showModal, setShowModal]        = useState(false);
   const [showSprintModal, setShowSprint] = useState(false);
   const [activeStory, setActiveStory]    = useState<UserStory | null>(null);
+  const [overColumnKey, setOverColumnKey] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -397,11 +401,24 @@ function AgilePageContent() {
   function handleDragStart(event: DragStartEvent) {
     const story = stories?.find((s) => s.id === event.active.id);
     setActiveStory(story ?? null);
+    setOverColumnKey(story?.status ?? null);
+  }
+
+  function handleDragOver(event: DragOverEvent) {
+    const { over } = event;
+    if (!over) { setOverColumnKey(null); return; }
+    const overType = over.data.current?.type as string | undefined;
+    if (overType === "column") {
+      setOverColumnKey(String(over.id));
+    } else {
+      setOverColumnKey(over.data.current?.status ?? null);
+    }
   }
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     setActiveStory(null);
+    setOverColumnKey(null);
     if (!over || !id || !stories) return;
 
     const activeId  = String(active.id);
@@ -511,6 +528,7 @@ function AgilePageContent() {
             sensors={sensors}
             collisionDetection={closestCorners}
             onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
           >
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -524,6 +542,7 @@ function AgilePageContent() {
                     storyIds={cols.map((s) => s.id)}
                     count={cols.length}
                     isLoading={loadingStories}
+                    isHighlighted={overColumnKey === key}
                   >
                     {cols.map((s) => (
                       <SortableCard key={s.id} story={s} onStatusChange={handleStatusChange} />
