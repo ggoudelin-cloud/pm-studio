@@ -8,12 +8,14 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Mail, Euro } from "lucide-react";
+import { Mail, Euro, Sun, Moon } from "lucide-react";
 import toast from "react-hot-toast";
+import { useThemeStore } from "@/stores/theme";
 
 export default function SettingsPage() {
   const { user, profile, setProfile } = useAuthStore();
   const { data: memberships = [] } = useMyMemberships();
+  const { theme, setTheme } = useThemeStore();
   // Client = uniquement des rôles client/observer sur tous ses projets
   const isClientOnly = memberships.length > 0 &&
     memberships.every(m => m.role === "client" || m.role === "observer");
@@ -141,6 +143,43 @@ export default function SettingsPage() {
                 </Button>
               </div>
             </form>
+          </CardBody>
+        </Card>
+
+        {/* Apparence */}
+        <Card>
+          <CardHeader>
+            <h2 className="font-semibold text-white">Apparence</h2>
+          </CardHeader>
+          <CardBody>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-slate-300">Thème de l&apos;interface</p>
+                <p className="text-xs text-slate-500 mt-0.5">Votre choix est mémorisé sur cet appareil</p>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  onClick={() => setTheme("dark")}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border transition-colors ${
+                    theme === "dark"
+                      ? "bg-indigo-600 border-indigo-500 text-white"
+                      : "border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-200"
+                  }`}
+                >
+                  <Moon className="w-4 h-4" /> Sombre
+                </button>
+                <button
+                  onClick={() => setTheme("light")}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border transition-colors ${
+                    theme === "light"
+                      ? "bg-indigo-600 border-indigo-500 text-white"
+                      : "border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-200"
+                  }`}
+                >
+                  <Sun className="w-4 h-4" /> Clair
+                </button>
+              </div>
+            </div>
           </CardBody>
         </Card>
 

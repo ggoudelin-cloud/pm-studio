@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "react-hot-toast";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/stores/auth";
+import { useThemeStore } from "@/stores/theme";
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -65,21 +66,39 @@ function AuthListener() {
   return null;
 }
 
+function ThemeApplier() {
+  const { setTheme } = useThemeStore();
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("pm-theme") as "dark" | "light" | null;
+      setTheme(stored ?? "dark");
+    } catch { /* rien */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
+}
+
+function ThemedToaster() {
+  const { theme } = useThemeStore();
+  return (
+    <Toaster
+      position="top-right"
+      toastOptions={{
+        style: theme === "light"
+          ? { background: "#ffffff", color: "#0f172a", border: "1px solid #e2e8f0" }
+          : { background: "#1e293b", color: "#f8fafc",  border: "1px solid #334155" },
+      }}
+    />
+  );
+}
+
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthListener />
+      <ThemeApplier />
       {children}
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          style: {
-            background: "#1e293b",
-            color: "#f8fafc",
-            border: "1px solid #334155",
-          },
-        }}
-      />
+      <ThemedToaster />
     </QueryClientProvider>
   );
 }

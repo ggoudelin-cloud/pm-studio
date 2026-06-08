@@ -12,8 +12,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr" className={`${geist.variable} h-full`}>
+    <html lang="fr" className={`${geist.variable} h-full`} suppressHydrationWarning>
       <body className="h-full antialiased">
+        {/* Applique le thème avant le premier rendu pour éviter un flash */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('pm-theme');if(t==='light')document.documentElement.classList.add('light');}catch(e){}})()`,
+          }}
+        />
         <Providers>{children}</Providers>
       </body>
     </html>
