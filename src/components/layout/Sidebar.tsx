@@ -15,6 +15,7 @@ import { notifStyle } from "@/lib/notifications";
 import { useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 const navItems = [
   { href: "/dashboard/",  label: "Tableau de bord", icon: LayoutDashboard },
@@ -120,8 +121,8 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
     if (n.link) { router.push(n.link); onClose(); }
   }
 
-  return (
-    <div ref={ref} className="absolute bottom-16 left-full ml-2 w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden">
+  return createPortal(
+    <div ref={ref} className="fixed bottom-16 left-60 ml-2 w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-[100] overflow-hidden">
       <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-white">Notifications</h3>
         {unread > 0
@@ -161,7 +162,8 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
         className="block px-4 py-2.5 text-center text-xs text-indigo-400 hover:bg-slate-800/50 border-t border-slate-800">
         Voir toutes mes actions →
       </Link>
-    </div>
+    </div>,
+    document.body
   );
 }
 
