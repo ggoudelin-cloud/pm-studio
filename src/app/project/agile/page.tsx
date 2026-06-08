@@ -15,10 +15,23 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { formatDate } from "@/lib/utils";
-import { Plus, X, Zap, Layers, Trash2 } from "lucide-react";
+import { Plus, X, Zap, Layers, Trash2, GripVertical } from "lucide-react";
 import type { UserStory, Sprint, Epic } from "@/types";
 import { useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  useDraggable,
+  closestCenter,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 
 const COLUMNS = [
   { key: "backlog",      label: "Backlog" },
@@ -29,18 +42,37 @@ const COLUMNS = [
 
 const POINTS_OPTIONS = [1, 2, 3, 5, 8, 13, 21];
 
-// ── Story card avec sélecteur de statut ──────────────────────────────────────
+// ── Story card (utilisée en rendu normal et dans le DragOverlay) ─────────────
 function StoryCard({
   story,
   onStatusChange,
+  dragHandleProps,
+  isDragging,
 }: {
   story: UserStory;
   onStatusChange: (id: string, status: string) => void;
+  dragHandleProps?: Record<string, unknown>;
+  isDragging?: boolean;
 }) {
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-lg p-3 space-y-2 hover:border-slate-600 transition-colors">
-      <p className="text-sm text-slate-200 leading-snug">{story.title}</p>
-      <div className="flex items-center gap-2 flex-wrap">
+    <div
+      className={`bg-slate-800 border rounded-lg p-3 space-y-2 transition-colors ${
+        isDragging
+          ? "border-indigo-500 shadow-lg shadow-indigo-900/30 opacity-80"
+          : "border-slate-700 hover:border-slate-600"
+      }`}
+    >
+      <div className="flex items-start gap-1.5">
+        {/* Poignée de drag */}
+        <div
+          {...dragHandleProps}
+          className="mt-0.5 shrink-0 cursor-grab active:cursor-grabbing text-slate-600 hover:text-slate-400 transition-colors"
+        >
+          <GripVertical className="w-3.5 h-3.5" />
+        </div>
+        <p className="text-sm text-slate-200 leading-snug flex-1">{story.title}</p>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap pl-5">
         {story.story_points && (
           <span className="text-xs bg-indigo-900/50 text-indigo-300 border border-indigo-800 rounded px-1.5 py-0.5 font-mono">
             {story.story_points} pts
@@ -52,7 +84,7 @@ function StoryCard({
         <select
           value={story.status}
           onChange={(e) => onStatusChange(story.id, e.target.value)}
-          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
           className="ml-auto text-xs bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
         >
           {COLUMNS.map((c) => (
@@ -64,7 +96,80 @@ function StoryCard({
   );
 }
 
-// ── Sprint card avec boutons Démarrer / Terminer ─────────────────────────────
+// ── Card draggable (wrapper dnd-kit) ─────────────────────────────────────────
+function DraggableCard({
+  story,
+  onStatusChange,
+}: {
+  story: UserStory;
+  onStatusChange: (id: string, status: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: story.id,
+    data: { status: story.status },
+  });
+
+  const style = transform
+    ? { transform: CSS.Translate.toString(transform), zIndex: 50, position: "relative" as const }
+    : undefined;
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <StoryCard
+        story={story}
+        onStatusChange={onStatusChange}
+        dragHandleProps={{ ...attributes, ...listeners }}
+        isDragging={isDragging}
+      />
+    </div>
+  );
+}
+
+// ── Colonne droppable ─────────────────────────────────────────────────────────
+function DroppableColumn({
+  columnKey,
+  label,
+  children,
+  count,
+  isLoading,
+}: {
+  columnKey: string;
+  label: string;
+  children: React.ReactNode;
+  count: number;
+  isLoading: boolean;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: columnKey });
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{label}</h3>
+        <span className="text-xs text-slate-600 bg-slate-800 px-2 py-0.5 rounded-full">{count}</span>
+      </div>
+      <div
+        ref={setNodeRef}
+        className={`flex flex-col gap-2 min-h-32 p-2 border rounded-xl transition-colors ${
+          isOver
+            ? "border-indigo-500 bg-indigo-950/20"
+            : "bg-slate-900/50 border-slate-800"
+        }`}
+      >
+        {isLoading ? (
+          <div className="flex justify-center py-4">
+            <div className="w-4 h-4 border border-slate-600 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : count === 0 ? (
+          <p className="text-xs text-slate-700 text-center py-4">Aucune story</p>
+        ) : (
+          children
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Sprint card ───────────────────────────────────────────────────────────────
 function SprintCard({
   sprint,
   onActivate,
@@ -144,7 +249,7 @@ function SprintCard({
   );
 }
 
-// ── Modal nouvelle user story ────────────────────────────────────────────────
+// ── Modal nouvelle story ──────────────────────────────────────────────────────
 function NewStoryModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
   const qc = useQueryClient();
   const [title, setTitle]     = useState("");
@@ -201,7 +306,7 @@ function NewStoryModal({ projectId, onClose }: { projectId: string; onClose: () 
   );
 }
 
-// ── Modal nouveau sprint ─────────────────────────────────────────────────────
+// ── Modal nouveau sprint ──────────────────────────────────────────────────────
 function NewSprintModal({ projectId, onClose, onCreate }: {
   projectId: string;
   onClose: () => void;
@@ -251,7 +356,7 @@ function NewSprintModal({ projectId, onClose, onCreate }: {
   );
 }
 
-// ── Page principale ──────────────────────────────────────────────────────────
+// ── Page principale ───────────────────────────────────────────────────────────
 function AgilePageContent() {
   const searchParams = useSearchParams();
   const id = searchParams.get("id");
@@ -260,10 +365,10 @@ function AgilePageContent() {
   const { data: stories,  isLoading: loadingStories } = useUserStories(id);
   const { data: epics = [] } = useEpics(id);
 
-  const createEpic  = useCreateEpic();
-  const updateEpic  = useUpdateEpic();
-  const deleteEpic  = useDeleteEpic();
-  const updateStory = useUpdateUserStory();
+  const createEpic   = useCreateEpic();
+  const updateEpic   = useUpdateEpic();
+  const deleteEpic   = useDeleteEpic();
+  const updateStory  = useUpdateUserStory();
   const createSprint = useCreateSprint();
   const updateSprint = useUpdateSprint();
 
@@ -271,8 +376,13 @@ function AgilePageContent() {
   const [epicTitle, setEpicTitle] = useState("");
   const [epicColor, setEpicColor] = useState("#6366f1");
   const [epicError, setEpicError] = useState("");
-  const [showModal, setShowModal]         = useState(false);
-  const [showSprintModal, setShowSprint]  = useState(false);
+  const [showModal, setShowModal]        = useState(false);
+  const [showSprintModal, setShowSprint] = useState(false);
+  const [activeStory, setActiveStory]    = useState<UserStory | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
 
   const storiesByStatus = (status: string) => stories?.filter((s) => s.status === status) ?? [];
   const totalPoints = stories?.reduce((sum, s) => sum + (s.story_points ?? 0), 0) ?? 0;
@@ -281,6 +391,20 @@ function AgilePageContent() {
   function handleStatusChange(storyId: string, status: string) {
     if (!id) return;
     updateStory.mutate({ id: storyId, project_id: id, status: status as UserStory["status"] });
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    const story = stories?.find((s) => s.id === event.active.id);
+    setActiveStory(story ?? null);
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    setActiveStory(null);
+    if (!over || !id) return;
+    const story = stories?.find((s) => s.id === active.id);
+    if (!story || story.status === over.id) return;
+    handleStatusChange(String(active.id), String(over.id));
   }
 
   function handleEpicSubmit(e: React.FormEvent) {
@@ -340,32 +464,37 @@ function AgilePageContent() {
 
         {/* ── Kanban ── */}
         {tab === "kanban" && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {COLUMNS.map(({ key, label }) => {
-              const cols = storiesByStatus(key);
-              return (
-                <div key={key} className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{label}</h3>
-                    <span className="text-xs text-slate-600 bg-slate-800 px-2 py-0.5 rounded-full">{cols.length}</span>
-                  </div>
-                  <div className="flex flex-col gap-2 min-h-32 p-2 bg-slate-900/50 border border-slate-800 rounded-xl">
-                    {loadingStories ? (
-                      <div className="flex justify-center py-4">
-                        <div className="w-4 h-4 border border-slate-600 border-t-transparent rounded-full animate-spin" />
-                      </div>
-                    ) : cols.length === 0 ? (
-                      <p className="text-xs text-slate-700 text-center py-4">Aucune story</p>
-                    ) : (
-                      cols.map((s) => (
-                        <StoryCard key={s.id} story={s} onStatusChange={handleStatusChange} />
-                      ))
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {COLUMNS.map(({ key, label }) => {
+                const cols = storiesByStatus(key);
+                return (
+                  <DroppableColumn
+                    key={key}
+                    columnKey={key}
+                    label={label}
+                    count={cols.length}
+                    isLoading={loadingStories}
+                  >
+                    {cols.map((s) => (
+                      <DraggableCard key={s.id} story={s} onStatusChange={handleStatusChange} />
+                    ))}
+                  </DroppableColumn>
+                );
+              })}
+            </div>
+
+            <DragOverlay dropAnimation={{ duration: 150, easing: "ease" }}>
+              {activeStory ? (
+                <StoryCard story={activeStory} onStatusChange={() => {}} isDragging />
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         )}
 
         {/* ── Sprints ── */}
