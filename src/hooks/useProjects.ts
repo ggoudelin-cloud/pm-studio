@@ -1095,3 +1095,63 @@ export function useDeleteSkill() {
     onError: (e: Error) => toast.error(e.message),
   });
 }
+
+// ── All milestones cross-project (portefeuille PMO) ───────────────────────────
+export function useAllMilestones() {
+  const { user } = useAuthStore();
+  return useQuery({
+    queryKey: ["milestones-all"],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await DB()
+        .from("milestones")
+        .select("*, projects(id, name)")
+        .order("due_date");
+      if (error) throw error;
+      return data as (Milestone & { projects: { id: string; name: string } | null })[];
+    },
+  });
+}
+
+// ── All project costs cross-project ──────────────────────────────────────────
+export function useAllProjectCosts() {
+  const { user } = useAuthStore();
+  return useQuery({
+    queryKey: ["costs-all"],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data, error } = await DB().from("project_costs").select("*");
+      if (error) throw error;
+      return data as import("@/types").ProjectCost[];
+    },
+  });
+}
+
+// ── Save baseline Gantt (copie start/due → baseline_start/end) ────────────────
+export function useSaveBaseline(projectId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      if (!projectId) return null;
+      const { data: tasks, error } = await DB()
+        .from("tasks")
+        .select("id, start_date, due_date")
+        .eq("project_id", projectId);
+      if (error) throw error;
+      await Promise.all(
+        (tasks ?? []).map(t =>
+          DB().from("tasks").update({
+            baseline_start: t.start_date ?? null,
+            baseline_end:   t.due_date   ?? null,
+          }).eq("id", t.id)
+        )
+      );
+      return projectId;
+    },
+    onSuccess: (pid) => {
+      if (pid) qc.invalidateQueries({ queryKey: ["tasks", pid] });
+      toast.success("Baseline sauvegardée !");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}

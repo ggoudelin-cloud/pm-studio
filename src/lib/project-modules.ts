@@ -65,5 +65,6 @@ export function getProjectModules(id: string, role: MemberRole | null): ProjectM
     { href: `/project/traceability/?id=${id}`,   label: "Traçabilité",             icon: GitMerge,      desc: "Liez exigences, tâches et cas de tests",                group: "Qualité" },
     { href: `/project/retrospectives/?id=${id}`, label: "Rétrospectives",          icon: RefreshCw,     desc: "Retours d'expérience de chaque sprint",                 group: "Qualité" },
     { href: `/project/team/?id=${id}`,           label: "Équipe",                  icon: Users,         desc: "Membres et rôles du projet",                            group: "Équipe" },
+    { href: `/project/capacity/?id=${id}`,        label: "Capacité & Charge",        icon: Users,         desc: "Heatmap de charge par membre et par semaine",            group: "Équipe" },
   ];
 }

@@ -82,6 +82,8 @@ export interface Task {
   actual_hours: number | null;
   due_date: string | null;
   allocation_pct: number;
+  baseline_start: string | null;
+  baseline_end: string | null;
   created_at: string;
   updated_at: string;
   profiles?: Profile;

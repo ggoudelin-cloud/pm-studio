@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, FolderKanban, Settings, LogOut,
-  ChevronRight, Layers, Bell, ArrowLeft, Inbox,
+  ChevronRight, Layers, Bell, ArrowLeft, Inbox, Briefcase,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
@@ -17,11 +17,12 @@ import toast from "react-hot-toast";
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 
-const navItems = [
+const navItemsBase = [
   { href: "/dashboard/",  label: "Tableau de bord", icon: LayoutDashboard },
   { href: "/projects/",   label: "Projets",          icon: FolderKanban },
   { href: "/actions/",    label: "Mes actions",      icon: Inbox },
 ];
+const navItemPmo = { href: "/dashboard/portfolio/", label: "Portefeuille PMO", icon: Briefcase };
 
 // Normalise un chemin (sans query ni slash final) pour comparer route active
 function routeOf(href: string) {
@@ -173,9 +174,12 @@ export default function Sidebar() {
   const router = useRouter();
   const qc = useQueryClient();
   const { data: notifications = [] } = useNotifications();
+  const { data: memberships = [] }   = useMyMemberships();
   const [showNotifs, setShowNotifs] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const unreadCount = notifications.filter(n => !n.read).length;
+  const isPmoOrPm = memberships.some(m => m.role === "pm" || m.role === "pmo");
+  const navItems = isPmoOrPm ? [...navItemsBase, navItemPmo] : navItemsBase;
 
   // Projet courant déduit de l'URL (?id=) — pour la navigation contextuelle.
   // Lu côté client (pas de useSearchParams pour ne pas imposer de Suspense ici).
