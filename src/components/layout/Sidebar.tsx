@@ -121,6 +121,8 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
   }
 
   return (
+    <>
+      <div onClick={onClose} className="fixed inset-0 bg-slate-950/60 z-40" aria-hidden />
     <div ref={ref} className="absolute bottom-16 left-full ml-2 w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden">
       <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-white">Notifications</h3>
@@ -162,6 +164,7 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
         Voir toutes mes actions →
       </Link>
     </div>
+    </>
   );
 }
 
