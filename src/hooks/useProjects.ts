@@ -378,6 +378,52 @@ export function useDeleteEpic() {
   });
 }
 
+// ── User Story update ────────────────────────────────────────────────────────
+export function useUpdateUserStory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, project_id, ...values }: Partial<UserStory> & { id: string; project_id: string }) => {
+      const { error } = await DB().from("user_stories").update(values).eq("id", id);
+      if (error) throw error;
+      return { project_id };
+    },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["stories", d.project_id] }); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+// ── Sprints create / update ──────────────────────────────────────────────────
+export function useCreateSprint() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (values: { project_id: string; name: string; goal?: string; start_date?: string; end_date?: string; velocity_planned?: number }) => {
+      const { error } = await DB().from("sprints").insert({
+        ...values,
+        status: "planned",
+        velocity_planned: values.velocity_planned ?? 0,
+        velocity_achieved: 0,
+      });
+      if (error) throw error;
+      return { project_id: values.project_id };
+    },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["sprints", d.project_id] }); toast.success("Sprint créé !"); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
+export function useUpdateSprint() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, project_id, ...values }: Partial<Sprint> & { id: string; project_id: string }) => {
+      const { error } = await DB().from("sprints").update(values).eq("id", id);
+      if (error) throw error;
+      return { project_id };
+    },
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["sprints", d.project_id] }); toast.success("Sprint mis à jour."); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+}
+
 // ── Phases ──────────────────────────────────────────────────────────────────
 export function usePhases(projectId: string | null) {
   const { user } = useAuthStore();
