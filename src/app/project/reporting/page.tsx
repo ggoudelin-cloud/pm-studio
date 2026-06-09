@@ -333,18 +333,20 @@ function ReportingContent() {
               )}
               {/* Bar chart par catégorie */}
               {costsByCat.length > 0 && (
-                <div className="h-32 overflow-hidden">
+                <div>
                   <p className="text-xs text-slate-500 mb-2 font-medium uppercase tracking-wide">Ventilation par catégorie</p>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={costsByCat} layout="vertical" margin={{ left: 4, right: 12, top: 0, bottom: 0 }}>
-                      <XAxis type="number" hide />
-                      <YAxis type="category" dataKey="cat" tick={{ fill: "#94a3b8", fontSize: 10 }} width={110} />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Bar dataKey="total" name="Montant HT (€)" radius={[0, 4, 4, 0]}>
-                        {costsByCat.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <div style={{ height: costsByCat.length * 42 + 8 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={costsByCat} layout="vertical" margin={{ left: 4, right: 12, top: 0, bottom: 0 }}>
+                        <XAxis type="number" hide />
+                        <YAxis type="category" dataKey="cat" tick={{ fill: "#94a3b8", fontSize: 10 }} width={130} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Bar dataKey="total" name="Montant HT (€)" radius={[0, 4, 4, 0]}>
+                          {costsByCat.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               )}
             </CardBody>
