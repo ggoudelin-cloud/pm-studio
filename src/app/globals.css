@@ -61,9 +61,9 @@ html.light {
   --foreground: #0f172a;
 
   /* Variables Tailwind slate : couvre bg-slate, border-slate et variantes d'opacité automatiquement */
-  --color-slate-950: #ffffff;
-  --color-slate-900: #f8fafc;
-  --color-slate-800: #f1f5f9;
+  --color-slate-950: #f1f5f9;
+  --color-slate-900: #ffffff;
+  --color-slate-800: #f8fafc;
   --color-slate-700: #e2e8f0;
   --color-slate-600: #cbd5e1;
   --color-slate-500: #94a3b8;
@@ -74,7 +74,7 @@ html.light {
 }
 
 html.light body {
-  background: #ffffff;
+  background: #f1f5f9;
   color: #0f172a;
 }
 
@@ -91,13 +91,13 @@ html.light input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 }
 
 /* ── Arrière-plans slate ───────────────────────────────────────────────────── */
-html.light .bg-slate-950 { background-color: #ffffff; }
-html.light .bg-slate-900 { background-color: #f8fafc; }
-html.light .bg-slate-800 { background-color: #f1f5f9; }
+html.light .bg-slate-950 { background-color: #f1f5f9; }
+html.light .bg-slate-900 { background-color: #ffffff; }
+html.light .bg-slate-800 { background-color: #f8fafc; }
 html.light .bg-slate-700 { background-color: #e2e8f0; }
 html.light .bg-slate-600 { background-color: #cbd5e1; }
 
-html.light .bg-slate-900\/50  { background-color: rgb(248 250 252 / 0.7); }
+html.light .bg-slate-900\/50  { background-color: rgb(255 255 255 / 0.85); }
 html.light .bg-slate-800\/50  { background-color: rgb(241 245 249 / 0.7); }
 html.light .bg-slate-800\/40  { background-color: rgb(241 245 249 / 0.6); }
 html.light .bg-slate-800\/30  { background-color: rgb(241 245 249 / 0.5); }
@@ -148,13 +148,19 @@ html.light .text-cyan-400   { color: #0891b2; }
 html.light .text-yellow-400 { color: #ca8a04; }
 
 /* ── Bordures slate ────────────────────────────────────────────────────────── */
-html.light .border-slate-900 { border-color: #e2e8f0; }
-html.light .border-slate-800 { border-color: #e2e8f0; }
-html.light .border-slate-700 { border-color: #cbd5e1; }
+html.light .border-slate-900 { border-color: #d1d9e0; }
+html.light .border-slate-800 { border-color: #d1d9e0; }
+html.light .border-slate-700 { border-color: #b8c5d0; }
 html.light .border-slate-600 { border-color: #94a3b8; }
 
-html.light .divide-slate-800 > * + * { border-color: #e2e8f0; }
-html.light .divide-slate-700 > * + * { border-color: #cbd5e1; }
+/* Ombre légère sur les cartes/panneaux arrondis pour les faire ressortir du fond */
+html.light .rounded-xl.border-slate-800,
+html.light .rounded-lg.border-slate-800 {
+  box-shadow: 0 1px 4px 0 rgb(0 0 0 / 0.07);
+}
+
+html.light .divide-slate-800 > * + * { border-color: #d1d9e0; }
+html.light .divide-slate-700 > * + * { border-color: #b8c5d0; }
 
 /* ── Bordures colorées sombres (-800/-900) → pastels ──────────────────────── */
 html.light [class*="border-red-8"],
@@ -195,7 +201,7 @@ html.light .hover\:border-slate-600:hover  { border-color: #94a3b8; }
 html.light .hover\:border-slate-700:hover  { border-color: #cbd5e1; }
 
 /* ── Focus ──────────────────────────────────────────────────────────────────── */
-html.light .focus\:ring-offset-slate-950 { --tw-ring-offset-color: #ffffff; }
+html.light .focus\:ring-offset-slate-950 { --tw-ring-offset-color: #f1f5f9; }
 
 /* ── Placeholder ────────────────────────────────────────────────────────────── */
 html.light .placeholder-slate-500::placeholder { color: #94a3b8; }
