@@ -598,7 +598,7 @@ function GanttContent() {
                     return (
                       <div key={task.id} style={{ height: ROW_H, position: "relative" }} className={`border-b border-slate-800/30 flex items-center ${isCritical ? "bg-red-950/5" : ""}`}>
                         {days.map((d, i) => (d.getDay() === 0 || d.getDay() === 6) ? (
-                          <div key={i} style={{ position: "absolute", left: i * DAY_W, width: DAY_W, top: 0, bottom: 0, background: "rgba(15,23,42,0.4)" }} />
+                          <div key={i} style={{ position: "absolute", left: i * DAY_W, width: DAY_W, top: 0, bottom: 0, background: "var(--gantt-weekend-bg)" }} />
                         ) : null)}
 
                         {/* Barre baseline (en dessous, semi-transparente) */}

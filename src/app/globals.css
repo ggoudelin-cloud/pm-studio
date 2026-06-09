@@ -3,6 +3,7 @@
 :root {
   --background: #020617;
   --foreground: #f8fafc;
+  --gantt-weekend-bg: rgba(15, 23, 42, 0.4);
 }
 
 @theme inline {
@@ -59,6 +60,7 @@ html.light {
   color-scheme: light;
   --background: #ffffff;
   --foreground: #0f172a;
+  --gantt-weekend-bg: rgba(100, 116, 139, 0.08);
 
   /* Variables Tailwind slate : couvre bg-slate, border-slate et variantes d'opacité automatiquement */
   --color-slate-950: #f1f5f9;
