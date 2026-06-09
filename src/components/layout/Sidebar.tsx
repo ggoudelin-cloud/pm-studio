@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, FolderKanban, Settings, LogOut,
-  ChevronRight, Layers, Bell, ArrowLeft, Inbox, Briefcase,
+  ChevronRight, Layers, Bell, ArrowLeft, Inbox, Briefcase, BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
@@ -16,6 +16,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
+import GuideModal from "./GuideModal";
 
 const navItemsBase = [
   { href: "/dashboard/",  label: "Tableau de bord", icon: LayoutDashboard },
@@ -176,10 +177,14 @@ export default function Sidebar() {
   const { data: notifications = [] } = useNotifications();
   const { data: memberships = [] }   = useMyMemberships();
   const [showNotifs, setShowNotifs] = useState(false);
+  const [showGuide,  setShowGuide]  = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const unreadCount = notifications.filter(n => !n.read).length;
   const isPmoOrPm = memberships.some(m => m.role === "pm" || m.role === "pmo");
   const navItems = isPmoOrPm ? [...navItemsBase, navItemPmo] : navItemsBase;
+  const dominantRole = isPmoOrPm
+    ? (memberships.some(m => m.role === "pmo") ? "pmo" : "pm")
+    : memberships.some(m => m.role === "dev") ? "dev" : "client";
 
   // Projet courant déduit de l'URL (?id=) — pour la navigation contextuelle.
   // Lu côté client (pas de useSearchParams pour ne pas imposer de Suspense ici).
@@ -199,6 +204,7 @@ export default function Sidebar() {
   }
 
   return (
+    <>
     <aside className="w-60 shrink-0 bg-slate-950 border-r border-slate-800 flex flex-col h-screen sticky top-0">
       {/* Logo */}
       <div className="px-5 py-5 border-b border-slate-800">
@@ -258,6 +264,14 @@ export default function Sidebar() {
 
         {showNotifs && <NotificationPanel onClose={() => setShowNotifs(false)} />}
 
+        <button
+          onClick={() => setShowGuide(true)}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+        >
+          <BookOpen className="w-4 h-4" />
+          Guide d&apos;utilisation
+        </button>
+
         <Link
           href="/settings/"
           className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
@@ -284,5 +298,8 @@ export default function Sidebar() {
         </div>
       </div>
     </aside>
+
+    {showGuide && <GuideModal role={dominantRole} onClose={() => setShowGuide(false)} />}
+    </>
   );
 }
